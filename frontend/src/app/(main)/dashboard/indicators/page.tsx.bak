@@ -1,0 +1,286 @@
+"use client";
+
+import { useState } from "react";
+import { ArrowLeft, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+
+import { DataTable } from "./_components/recent-leads-table/table";
+import { indicatorColumns, purchaserColumns } from "./_components/recent-leads-table/columns";
+import type { IndicatorRow, PurchaserRow } from "./_components/recent-leads-table/schema";
+
+
+// --- INITIAL STATE DATA ---
+const initialIndicators: IndicatorRow[] = [
+  { id: "PUB;1001", name: "SuperTrend Pro", description: "Advanced trend following script with alerts.", price: 49.99, status: "Running", purchasedCount: 142 },
+  { id: "PUB;1002", name: "Volume Scanner", description: "Scans for unusual volume spikes.", price: 29.99, status: "Running", purchasedCount: 89 },
+  { id: "PUB;1003", name: "Reversal Bot V2", description: "Detects market tops and bottoms automatically.", price: 99.00, status: "Stopped", purchasedCount: 310 },
+];
+
+const initialPurchasers: Record<string, PurchaserRow[]> = {
+  "PUB;1001": [
+    { id: "usr_1", username: "theshadowmonarch4", productName: "SuperTrend Pro", purchasedAt: "2026-04-26 14:30", accessStatus: "Approved", subscription: "1 Month", expiresAt: "29 Days left" },
+    { id: "usr_2", username: "trader_john99", productName: "SuperTrend Pro", purchasedAt: "2026-04-20 09:15", accessStatus: "Approved", subscription: "Lifetime", expiresAt: "Never" },
+  ],
+};
+
+export default function Page() {
+  const [indicators, setIndicators] = useState<IndicatorRow[]>(initialIndicators);
+  const [purchasersMap, setPurchasersMap] = useState<Record<string, PurchaserRow[]>>(initialPurchasers);
+  const [selectedIndicator, setSelectedIndicator] = useState<IndicatorRow | null>(null);
+
+  // Modal States
+  const [isIndicatorModalOpen, setIsIndicatorModalOpen] = useState(false);
+  const [indicatorForm, setIndicatorForm] = useState<Partial<IndicatorRow>>({});
+  
+  const [isPurchaserModalOpen, setIsPurchaserModalOpen] = useState(false);
+  const [purchaserForm, setPurchaserForm] = useState<Partial<PurchaserRow>>({});
+
+  // --- HANDLERS: INDICATORS ---
+  const handleSaveIndicator = () => {
+    if (indicatorForm.id) {
+      setIndicators((prev) => prev.map((i) => (i.id === indicatorForm.id ? { ...i, ...indicatorForm } as IndicatorRow : i)));
+    } else {
+      const newIndicator: IndicatorRow = {
+        id: `PUB;${Math.floor(Math.random() * 10000)}`,
+        name: indicatorForm.name || "New Indicator",
+        description: indicatorForm.description || "",
+        price: indicatorForm.price || 0,
+        status: "Running",
+        purchasedCount: 0,
+      };
+      setIndicators([...indicators, newIndicator]);
+    }
+    setIsIndicatorModalOpen(false);
+  };
+
+  // --- HANDLERS: PURCHASERS ---
+  const handleSavePurchaser = () => {
+    if (!purchaserForm.productName) return;
+
+    // Find the indicator ID based on the selected product name
+    const targetInd = indicators.find(i => i.name === purchaserForm.productName);
+    if (!targetInd) return;
+
+    setPurchasersMap((prev) => {
+      const newState = { ...prev };
+
+      if (purchaserForm.id) {
+        // Handle Edit
+        // If the admin changed the product, remove them from the old indicator's list
+        if (selectedIndicator && selectedIndicator.name !== targetInd.name) {
+           newState[selectedIndicator.id] = (newState[selectedIndicator.id] || []).filter(p => p.id !== purchaserForm.id);
+        }
+
+        // Add/Update in the target indicator's list
+        const targetList = newState[targetInd.id] || [];
+        const exists = targetList.some(p => p.id === purchaserForm.id);
+        
+        if (exists) {
+          newState[targetInd.id] = targetList.map(p => p.id === purchaserForm.id ? { ...p, ...purchaserForm } as PurchaserRow : p);
+        } else {
+          newState[targetInd.id] = [...targetList, purchaserForm as PurchaserRow];
+        }
+      } else {
+        // Handle Add New
+        const newPurchaser: PurchaserRow = {
+          id: `usr_${Math.floor(Math.random() * 10000)}`,
+          username: purchaserForm.username || "",
+          productName: targetInd.name,
+          purchasedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
+          accessStatus: purchaserForm.accessStatus || "Approved",
+          subscription: purchaserForm.subscription || "1 Month",
+          expiresAt: "Pending calculation",
+        };
+        newState[targetInd.id] = [...(newState[targetInd.id] || []), newPurchaser];
+      }
+      return newState;
+    });
+    setIsPurchaserModalOpen(false);
+  };
+
+  // --- RENDER VIEWS ---
+  if (selectedIndicator) {
+    const purchasersData = purchasersMap[selectedIndicator.id] || [];
+
+    return (
+      <div className="w-full flex flex-col gap-4 md:gap-6 p-2 md:p-2">
+        <DataTable 
+          title={`Purchasers: ${selectedIndicator.name}`}
+          description="Manage users who have access to this specific indicator."
+          columns={purchaserColumns}
+          data={purchasersData}
+          meta={{
+            onEditPurchaser: (purchaser: PurchaserRow) => {
+              setPurchaserForm(purchaser);
+              setIsPurchaserModalOpen(true);
+            }
+          }}
+          headerAction={
+            <Button variant="ghost" size="icon" onClick={() => setSelectedIndicator(null)} className="mr-2">
+              <ArrowLeft className="size-5" />
+            </Button>
+          }
+          rightAction={
+            <Button 
+              size="icon" 
+              onClick={() => {
+                // Pre-fill the product name with the currently viewed indicator
+                setPurchaserForm({ 
+                  accessStatus: "Approved", 
+                  subscription: "1 Month", 
+                  productName: selectedIndicator.name 
+                }); 
+                setIsPurchaserModalOpen(true);
+              }}
+            >
+              <Plus className="size-4" />
+            </Button>
+          }
+        />
+
+        {/* Create / Edit Purchaser Modal */}
+        <Dialog open={isPurchaserModalOpen} onOpenChange={setIsPurchaserModalOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{purchaserForm.id ? "Edit Participant Access" : "Add New Participant"}</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Username</Label>
+                <Input 
+                  placeholder="TradingView username"
+                  value={purchaserForm.username || ""} 
+                  onChange={(e) => setPurchaserForm({...purchaserForm, username: e.target.value})}
+                  className="col-span-3" 
+                />
+              </div>
+              
+              {/* Product selection is now ALWAYS visible so Admin can pick */}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Product</Label>
+                <Select 
+                  value={purchaserForm.productName} 
+                  onValueChange={(val) => setPurchaserForm({...purchaserForm, productName: val})}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select indicator" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {indicators.map((ind) => (
+                      <SelectItem key={ind.id} value={ind.name}>{ind.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label className="text-right">Subscription</Label>
+                <Select 
+                  value={purchaserForm.subscription} 
+                  onValueChange={(val) => setPurchaserForm({...purchaserForm, subscription: val})}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Select duration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1 Day">1 Day</SelectItem>
+                    <SelectItem value="7 Days">7 Days</SelectItem>
+                    <SelectItem value="1 Month">1 Month</SelectItem>
+                    <SelectItem value="Lifetime">Lifetime</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Deny Access Toggle */}
+              <div className="grid grid-cols-4 items-center gap-4 mt-2">
+                <Label className="text-right text-red-500 font-semibold">Deny Access</Label>
+                <div className="col-span-3 flex items-center space-x-3">
+                  <Switch 
+                    checked={purchaserForm.accessStatus === "Declined"}
+                    onCheckedChange={(checked) => 
+                      setPurchaserForm({
+                        ...purchaserForm, 
+                        accessStatus: checked ? "Declined" : "Approved"
+                      })
+                    }
+                  />
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {purchaserForm.accessStatus === "Declined" 
+                      ? "Access Blocked (Will be removed from TV)" 
+                      : "Access Enabled"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsPurchaserModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleSavePurchaser}>{purchaserForm.id ? "Save Changes" : "Add Participant"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // Default: Show the Indicators view
+  return (
+    <div className="w-full flex flex-col gap-4 md:gap-6 p-2 md:p-4">
+      <DataTable 
+        title="Indicators"
+        description="Manage your active Pine Script indicators and view sales."
+        columns={indicatorColumns}
+        data={indicators}
+        meta={{
+          onViewPurchasers: (indicator: IndicatorRow) => setSelectedIndicator(indicator),
+          onEditIndicator: (indicator: IndicatorRow) => {
+            setIndicatorForm(indicator);
+            setIsIndicatorModalOpen(true);
+          }
+        }}
+        rightAction={
+          <Button 
+            size="icon" 
+            onClick={() => {
+              setIndicatorForm({});
+              setIsIndicatorModalOpen(true);
+            }}
+          >
+            <Plus className="size-4" />
+          </Button>
+        }
+      />
+
+      <Dialog open={isIndicatorModalOpen} onOpenChange={setIsIndicatorModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{indicatorForm.id ? "Edit Indicator" : "Create New Indicator"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Indicator Name</Label>
+              <Input placeholder="e.g., Trend Analyzer" value={indicatorForm.name || ""} onChange={(e) => setIndicatorForm({...indicatorForm, name: e.target.value})} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Description</Label>
+              <Input placeholder="Briefly describe what it does" value={indicatorForm.description || ""} onChange={(e) => setIndicatorForm({...indicatorForm, description: e.target.value})} />
+            </div>
+            <div className="grid gap-2">
+              <Label>Price ($)</Label>
+              <Input type="number" placeholder="29.99" value={indicatorForm.price || ""} onChange={(e) => setIndicatorForm({...indicatorForm, price: parseFloat(e.target.value)})} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsIndicatorModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveIndicator}>Save Indicator</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

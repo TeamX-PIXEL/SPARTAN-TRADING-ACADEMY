@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ebolt Sign Up - Animated</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        gray: {
+                            50: '#f9fafb',
+                            100: '#f3f4f6',
+                            200: '#e5e7eb',
+                            300: '#d1d5db',
+                            400: '#9ca3af',
+                            500: '#6b7280',
+                            600: '#4b5563',
+                            700: '#374151',
+                            800: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        }
+                    },
+                    boxShadow: {
+                        'card': '0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 40px rgba(255, 255, 255, 0.5) inset',
+                        'icon': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                        'button-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    },
+                    transitionTimingFunction: {
+                        'out-expo': 'cubic-bezier(0.16, 1, 0.3, 1)',
+                        'bounce-sm': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #aed6f1;
+            background-image: 
+                linear-gradient(to bottom, rgba(160, 210, 245, 0.8), rgba(255, 255, 255, 0.9)),
+                url('https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2574&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        /* Subtle living background animation */
+        @keyframes pulseRings {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+        }
+
+        .bg-circles {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 100vw;
+            height: 100vw;
+            min-width: 1000px;
+            min-height: 1000px;
+            pointer-events: none;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle, transparent 20%, rgba(255, 255, 255, 0.4) 20.2%, transparent 20.5%),
+                radial-gradient(circle, transparent 35%, rgba(255, 255, 255, 0.3) 35.2%, transparent 35.5%),
+                radial-gradient(circle, transparent 50%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%);
+            animation: pulseRings 20s ease-in-out infinite;
+        }
+
+        /* Entrance Animations */
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        @keyframes fadeSlideRight {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .animate-card {
+            animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .animate-logo {
+            animation: fadeSlideRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Staggered form elements */
+        .stagger-1 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards; opacity: 0; }
+        .stagger-2 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards; opacity: 0; }
+        .stagger-3 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards; opacity: 0; }
+        .stagger-4 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; opacity: 0; }
+        .stagger-5 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards; opacity: 0; }
+
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active{
+            -webkit-box-shadow: 0 0 0 30px #f3f4f6 inset !important;
+            -webkit-text-fill-color: #111827 !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+
+        /* Password icon morph states */
+        .icon-hidden {
+            opacity: 0;
+            transform: scale(0.5) rotate(-45deg);
+        }
+        .icon-visible {
+            opacity: 1;
+            transform: scale(1) rotate(0deg);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center text-gray-900 antialiased relative overflow-hidden">
+
+    <!-- Background Circles -->
+    <div class="bg-circles"></div>
+
+    <!-- Top Left Logo -->
+    <div class="absolute top-6 left-6 z-20 flex items-center gap-2 animate-logo">
+        <div class="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center hover:scale-105 hover:rotate-3 transition-transform duration-300 ease-bounce-sm cursor-pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="white"/>
+            </svg>
+        </div>
+        <span class="font-bold text-xl tracking-tight text-gray-900">Ebolt</span>
+    </div>
+
+    <!-- Main Card Container -->
+    <main class="w-full max-w-[420px] bg-white/95 backdrop-blur-md rounded-[3rem] shadow-card p-10 z-10 mx-4 relative overflow-hidden border border-white/40 animate-card my-8">
+        
+        <!-- Subtle top gradient inside card -->
+        <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#eaf5fc] to-transparent pointer-events-none opacity-60"></div>
+
+        <div class="relative z-10 flex flex-col items-center">
+            
+            <!-- Sign Up Icon (User Plus) -->
+            <div class="w-14 h-14 bg-white rounded-2xl shadow-icon flex items-center justify-center mb-6 border border-gray-50 hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <line x1="19" y1="8" x2="19" y2="14"></line>
+                    <line x1="22" y1="11" x2="16" y2="11"></line>
+                </svg>
+            </div>
+
+            <!-- Title & Subtitle -->
+            <h1 class="text-xl font-semibold mb-2">Create an account</h1>
+            <p class="text-[13px] text-gray-500 text-center leading-relaxed mb-8 px-2">
+                Join us to bring your words, data,<br>and teams together. For free.
+            </p>
+
+            <!-- Form -->
+            <form class="w-full space-y-3" onsubmit="handleSignup(event);">
+                
+                <!-- Full Name Input -->
+                <div class="stagger-1 group flex items-center bg-gray-100 rounded-xl px-4 py-3 border border-transparent focus-within:border-gray-200 focus-within:bg-white focus-within:shadow-sm transition-all duration-300">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 group-focus-within:text-gray-700 transition-colors duration-300 mr-3">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <input id="signup-name" type="text" placeholder="Full Name" class="w-full bg-transparent border-none outline-none text-[15px] placeholder-gray-400 text-gray-900 transition-colors duration-300" required>
+                </div>
+
+                <!-- Email Input -->
+                <div class="stagger-2 group flex items-center bg-gray-100 rounded-xl px-4 py-3 border border-transparent focus-within:border-gray-200 focus-within:bg-white focus-within:shadow-sm transition-all duration-300">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 group-focus-within:text-gray-700 transition-colors duration-300 mr-3">
+                        <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                    </svg>
+                    <input id="signup-email" type="email" placeholder="Email" class="w-full bg-transparent border-none outline-none text-[15px] placeholder-gray-400 text-gray-900 transition-colors duration-300" required>
+                </div>
+
+                <!-- Password Input -->
+                <div class="stagger-3 group flex items-center bg-gray-100 rounded-xl px-4 py-3 border border-transparent focus-within:border-gray-200 focus-within:bg-white focus-within:shadow-sm transition-all duration-300">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 group-focus-within:text-gray-700 transition-colors duration-300 mr-3">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <input id="signup-password" type="password" placeholder="Create Password" class="w-full bg-transparent border-none outline-none text-[15px] placeholder-gray-400 text-gray-900 transition-colors duration-300" required>
+                    
+                    <!-- Animated Eye Toggle Button -->
+                    <button type="button" onclick="togglePassword()" class="relative w-5 h-5 ml-2 text-gray-400 hover:text-gray-700 focus:outline-none focus:text-gray-900 transition-colors rounded-full focus:ring-2 focus:ring-gray-200 focus:ring-offset-1">
+                        <!-- Eye Closed (Slashed) -->
+                        <svg id="eye-closed" class="absolute top-0 left-0 w-full h-full transition-all duration-300 ease-out-expo icon-visible" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                        </svg>
+                        <!-- Eye Open -->
+                        <svg id="eye-open" class="absolute top-0 left-0 w-full h-full transition-all duration-300 ease-out-expo icon-hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Error Message -->
+                <div id="signup-error" class="hidden text-[13px] text-red-500 font-semibold text-center bg-red-50 border border-red-200 rounded-xl px-4 py-2.5"></div>
+
+                <!-- Submit Button (Added mt-4 to replace the forgot password spacing) -->
+                <div class="pt-2">
+                    <button type="submit" id="signup-btn" class="stagger-4 w-full bg-[#232326] text-white font-medium text-[15px] py-3.5 rounded-xl transition-all duration-300 ease-out-expo hover:bg-black hover:-translate-y-[2px] hover:shadow-button-hover active:translate-y-[1px] active:scale-[0.98]">
+                        Create Account
+                    </button>
+                </div>
+
+            </form>
+
+            <!-- Divider -->
+            <div class="stagger-5 w-full flex items-center justify-between my-6">
+                <div class="h-px bg-gray-100 flex-grow"></div>
+                <span class="text-[11px] text-gray-400 uppercase tracking-wider px-4 font-medium">Or sign up with</span>
+                <div class="h-px bg-gray-100 flex-grow"></div>
+            </div>
+
+            <!-- Social Buttons -->
+            <div class="stagger-5 w-full grid grid-cols-3 gap-3 mb-2">
+                <button class="flex items-center justify-center py-2.5 border border-gray-200 rounded-xl bg-white transition-all duration-300 ease-out-expo hover:-translate-y-1 hover:shadow-md hover:border-gray-300 active:translate-y-0 active:scale-95 group">
+                    <svg class="transition-transform duration-300 group-hover:scale-110" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.16v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.16C1.43 8.55 1 10.22 1 12s.43 3.45 1.16 4.93l3.68-2.84z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.16 7.07l3.68 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                </button>
+                <button class="flex items-center justify-center py-2.5 border border-gray-200 rounded-xl bg-white transition-all duration-300 ease-out-expo hover:-translate-y-1 hover:shadow-md hover:border-gray-300 active:translate-y-0 active:scale-95 group">
+                    <svg class="transition-transform duration-300 group-hover:scale-110" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" fill="#1877F2"/>
+                    </svg>
+                </button>
+                <button class="flex items-center justify-center py-2.5 border border-gray-200 rounded-xl bg-white transition-all duration-300 ease-out-expo hover:-translate-y-1 hover:shadow-md hover:border-gray-300 active:translate-y-0 active:scale-95 group">
+                    <svg class="transition-transform duration-300 group-hover:scale-110" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M16.635 13.061c.012 3.098 2.668 4.12 2.686 4.128-.022.068-.415 1.428-1.398 2.868-.85 1.246-1.748 2.483-3.13 2.508-1.36.024-1.801-.812-3.344-.812-1.543 0-2.028.79-3.326.83-1.341.042-2.368-1.34-3.226-2.576-1.83-2.647-3.237-7.465-1.362-10.725.932-1.62 2.56-2.651 4.316-2.677 1.318-.024 2.575.89 3.359.89.784 0 2.321-1.103 3.931-.938 1.666.07 3.166.671 4.113 1.942-3.165 1.85-2.668 6.002-.619 6.56z" fill="#000000"/>
+                        <path d="M14.975 4.312c.732-.888 1.226-2.126 1.09-3.362-1.066.044-2.35.714-3.1 1.604-.67.785-1.261 2.05-.1 3.264 1.189.106 2.378-.619 2.11-1.506z" fill="#000000"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Switch to Sign In -->
+            <p class="stagger-5 mt-6 text-[13px] text-gray-500 text-center">
+                Already have an account? 
+                <a href="/auth/login" class="text-gray-900 font-semibold hover:underline decoration-gray-300 underline-offset-4 transition-all">Sign in</a>
+            </p>
+
+        </div>
+    </main>
+
+    <script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('signup-password');
+            const eyeClosed = document.getElementById('eye-closed');
+            const eyeOpen = document.getElementById('eye-open');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                eyeClosed.classList.remove('icon-visible');
+                eyeClosed.classList.add('icon-hidden');
+                eyeOpen.classList.remove('icon-hidden');
+                eyeOpen.classList.add('icon-visible');
+            } else {
+                passwordInput.type = 'password';
+                eyeOpen.classList.remove('icon-visible');
+                eyeOpen.classList.add('icon-hidden');
+                eyeClosed.classList.remove('icon-hidden');
+                eyeClosed.classList.add('icon-visible');
+            }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const name = document.getElementById('signup-name').value.trim();
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value;
+            const errorEl = document.getElementById('signup-error');
+            const btn = document.getElementById('signup-btn');
+
+            errorEl.classList.add('hidden');
+            btn.innerText = 'Creating account...';
+            btn.disabled = true;
+
+            const userid = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+
+            try {
+                const res = await fetch('/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        UserID: userid,
+                        UserName: name,
+                        email: email,
+                        password: password
+                    })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    // Redirect to verification page instead of auto-login
+                    window.location.href = `/auth/verify.html?email=${encodeURIComponent(email)}`;
+                } else {
+                    errorEl.innerText = data.detail || 'Signup failed. Please try again.';
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorEl.innerText = 'Network error. Is the server running?';
+                errorEl.classList.remove('hidden');
+            } finally {
+                btn.innerText = 'Create Account';
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

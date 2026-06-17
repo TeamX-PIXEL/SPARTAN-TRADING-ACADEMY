@@ -1,0 +1,121 @@
+"use client";
+"use no memo"; // Crucial for row drag state
+
+import * as React from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type Row,
+} from "@tanstack/react-table";
+
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { chapterColumns, type ChapterRow } from "./chapters-columns";
+
+// Adapted exactly from your DraggableProposalSectionsRow reference
+export function DraggableChapterRow({ row }: { row: Row<ChapterRow> }) {
+  const { transform, transition, setNodeRef, isDragging } = useSortable({
+    id: row.original.id,
+  });
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      data-state={row.getIsSelected() && "selected"}
+      data-dragging={isDragging}
+      className="relative z-0 bg-background data-[dragging=true]:z-10 data-[dragging=true]:opacity-80"
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+      }}
+    >
+      {row.getVisibleCells().map((cell) => (
+        <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+      ))}
+    </TableRow>
+  );
+}
+
+export function ChaptersTable({ initialData }: { initialData: ChapterRow[] }) {
+  const [data, setData] = React.useState(initialData);
+
+  // Added constraints so normal clicks don't instantly trigger a drag
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const table = useReactTable({
+    data,
+    columns: chapterColumns,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (row) => row.id, 
+  });
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setData((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={[restrictToVerticalAxis]}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader className="bg-muted/50">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            <SortableContext items={data.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+              {table.getRowModel().rows.map((row) => (
+                <DraggableChapterRow key={row.id} row={row} />
+              ))}
+            </SortableContext>
+          </TableBody>
+        </Table>
+      </div>
+    </DndContext>
+  );
+}

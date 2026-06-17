@@ -1,0 +1,10 @@
+__pycache__/
+venv/
+.env
+.env.bak
+*.log
+*.db
+db.json
+*.bak
+.DS_Store
+ssh_key.txt

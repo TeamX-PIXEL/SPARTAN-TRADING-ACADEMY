@@ -1,0 +1,11 @@
+import z from "zod";
+
+export const academyCourseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  price: z.number(),
+  purchasedCount: z.number(),
+});
+
+export type AcademyCourseRow = z.infer<typeof academyCourseSchema>;

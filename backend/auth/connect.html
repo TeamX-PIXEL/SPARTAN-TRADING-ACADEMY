@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ebolt Setup - Connect TradingView</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        gray: {
+                            50: '#f9fafb',
+                            100: '#f3f4f6',
+                            200: '#e5e7eb',
+                            300: '#d1d5db',
+                            400: '#9ca3af',
+                            500: '#6b7280',
+                            600: '#4b5563',
+                            700: '#374151',
+                            800: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        }
+                    },
+                    boxShadow: {
+                        'card': '0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 40px rgba(255, 255, 255, 0.5) inset',
+                        'icon': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                        'button-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    },
+                    transitionTimingFunction: {
+                        'out-expo': 'cubic-bezier(0.16, 1, 0.3, 1)',
+                        'bounce-sm': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #aed6f1;
+            background-image: 
+                linear-gradient(to bottom, rgba(160, 210, 245, 0.8), rgba(255, 255, 255, 0.9)),
+                url('https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2574&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        @keyframes pulseRings {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+        }
+
+        .bg-circles {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 100vw;
+            height: 100vw;
+            min-width: 1000px;
+            min-height: 1000px;
+            pointer-events: none;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle, transparent 20%, rgba(255, 255, 255, 0.4) 20.2%, transparent 20.5%),
+                radial-gradient(circle, transparent 35%, rgba(255, 255, 255, 0.3) 35.2%, transparent 35.5%),
+                radial-gradient(circle, transparent 50%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%);
+            animation: pulseRings 20s ease-in-out infinite;
+        }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        @keyframes fadeSlideRight {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .animate-card { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-logo { animation: fadeSlideRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .stagger-1 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards; opacity: 0; }
+        .stagger-2 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards; opacity: 0; }
+        .stagger-3 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards; opacity: 0; }
+        .stagger-4 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; opacity: 0; }
+
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active{
+            -webkit-box-shadow: 0 0 0 30px #f3f4f6 inset !important;
+            -webkit-text-fill-color: #111827 !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center text-gray-900 antialiased relative overflow-hidden">
+
+    <div class="bg-circles"></div>
+
+    <div class="absolute top-6 left-6 z-20 flex items-center gap-2 animate-logo">
+        <div class="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center hover:scale-105 hover:rotate-3 transition-transform duration-300 ease-bounce-sm cursor-pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="white"/>
+            </svg>
+        </div>
+        <span class="font-bold text-xl tracking-tight text-gray-900">Ebolt</span>
+    </div>
+
+    <main class="w-full max-w-[420px] bg-white/95 backdrop-blur-md rounded-[3rem] shadow-card p-10 z-10 mx-4 relative overflow-hidden border border-white/40 animate-card my-8">
+        
+        <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#eaf5fc] to-transparent pointer-events-none opacity-60"></div>
+
+        <div class="relative z-10 flex flex-col items-center">
+            
+            <div class="w-14 h-14 bg-white rounded-2xl shadow-icon flex items-center justify-center mb-6 border border-gray-50 hover:shadow-md hover:-translate-y-1 transition-all duration-300">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+            </div>
+
+            <h1 class="text-xl font-semibold mb-2">Connect TradingView</h1>
+            <p class="text-[13px] text-gray-500 text-center leading-relaxed mb-8 px-2">
+                Enter your TradingView username to receive<br>alerts directly on your charts.
+            </p>
+
+            <div id="connect-error" class="hidden w-full bg-red-50 border border-red-200 text-red-700 text-[13px] rounded-xl px-4 py-3 mb-4"></div>
+
+            <form class="w-full space-y-4" onsubmit="handleConnect(event)">
+                
+                <div class="stagger-1">
+                    <label class="block text-[12px] font-medium text-gray-600 mb-1.5 ml-1">TradingView ID</label>
+                    <div class="group flex items-center bg-gray-100 rounded-xl px-4 py-3 border border-transparent focus-within:border-gray-200 focus-within:bg-white focus-within:shadow-sm transition-all duration-300">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 group-focus-within:text-gray-700 transition-colors duration-300 mr-3">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        <input id="tvid-input" type="text" placeholder="e.g. trader_ebolt" required class="w-full bg-transparent border-none outline-none text-[15px] placeholder-gray-400 text-gray-900 transition-colors duration-300">
+                    </div>
+                </div>
+
+                <div class="pt-4 stagger-2">
+                    <button id="submitBtn" type="submit" class="w-full bg-[#232326] text-white font-medium text-[15px] py-3.5 rounded-xl transition-all duration-300 ease-out-expo hover:bg-black hover:-translate-y-[2px] hover:shadow-button-hover flex items-center justify-center disabled:opacity-80 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none">
+                        <svg id="loadingSpinner" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span id="btnText">Connect</span>
+                    </button>
+                </div>
+            </form>
+
+            <p class="stagger-3 mt-6 text-[13px] text-gray-500 text-center">
+                I'll do this later. 
+                <button onclick="handleSkip()" class="text-gray-900 font-semibold hover:underline decoration-gray-300 underline-offset-4 transition-all cursor-pointer">Skip for now</button>
+            </p>
+
+        </div>
+    </main>
+
+    <script>
+        async function handleConnect(e) {
+            e.preventDefault();
+            const tvid = document.getElementById('tvid-input').value.trim();
+            const errorEl = document.getElementById('connect-error');
+            const btn = document.getElementById('submitBtn');
+            const spinner = document.getElementById('loadingSpinner');
+            const btnText = document.getElementById('btnText');
+
+            errorEl.classList.add('hidden');
+            btn.disabled = true;
+            spinner.classList.remove('hidden');
+            btnText.textContent = 'Connecting...';
+
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/auth/login';
+                return;
+            }
+
+            try {
+                const res = await fetch('/users/me', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ tvid: tvid })
+                });
+
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    const data = await res.json();
+                    errorEl.innerText = data.detail || 'Failed to save. Please try again.';
+                    errorEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errorEl.innerText = 'Network error. Please try again.';
+                errorEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                spinner.classList.add('hidden');
+                btnText.textContent = 'Connect';
+            }
+        }
+
+        function handleSkip() {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

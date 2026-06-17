@@ -1,0 +1,34 @@
+// app/dashboard/academy/page.tsx
+import { AcademyTable } from "./_components/courses-table"; 
+import type { CourseRow } from "./_components/courses-schema";
+
+const courseData: CourseRow[] = [
+  {
+    courseId: "SOC-101",
+    courseName: "SOC Fundamentals",
+    courseDescription: "Introduction to Security Operations Centers.",
+    price: 49.99,
+    purchasedCount: 342,
+  },
+  {
+    courseId: "SOC-201",
+    courseName: "Advanced Threat Hunting",
+    courseDescription: "Proactive threat hunting techniques.",
+    price: 89.99,
+    purchasedCount: 156,
+  },
+];
+
+export default function AcademyDashboardPage() {
+  return (
+    <div className="space-y-6 p-6">
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight">Academy Courses</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Manage your course catalog and select a course to view its active batches.
+        </p>
+      </div>
+      <AcademyTable data={courseData} />
+    </div>
+  );
+}

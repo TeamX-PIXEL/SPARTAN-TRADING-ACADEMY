@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Trading Alerts</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0 0 25px 0;
+            color: #007bff;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 16px;
+            margin-top: 5px;
+            color: #333;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .column {
+            display: inline-block;
+            width: 45%;
+            vertical-align: top;
+            margin-right: 5%;
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 5px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            margin-right: 8px;
+            transform: scale(1.2);
+            accent-color: #007bff;
+        }
+
+        .checkbox-item label {
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            padding: 12px 20px;
+            width: 100%;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #dc3545;
+        }
+
+        .invite-page,
+        .expired-page {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .social-links {
+            margin-top: 30px;
+        }
+
+        .social-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px;
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            min-width: 200px;
+        }
+
+        .social-links a:hover {
+            background: #0056b3;
+        }
+
+        .social-links .telegram {
+            background: #0088cc;
+        }
+
+        .social-links .youtube {
+            background: #ff0000;
+        }
+
+        .social-links .instagram {
+            background: #e4405f;
+        }
+
+        .social-links .website {
+            background: #28a745;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .status-message {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading" class="loading">
+        <h1><span class="model-name">Evergreen</span> Alerts</h1>
+        <p>Loading...</p>
+    </div>
+
+    <div id="invite-page" class="invite-page hidden">
+        <h1><span class="model-name">Evergreen</span> Alerts</h1>
+        <h2>Welcome to <span class="model-name">Evergreen</span> Trading Alerts!</h2>
+        <p>You're not registered yet. Please subscribe to get access to our premium trading alerts.</p>
+        <div class="social-links">
+            <a href="{{ telegramUrl }}" class="telegram"><i class="fab fa-telegram-plane"></i> Join Telegram</a>
+            <a onclick="openExternalLink('{{ youtubeUrl }}')" class="youtube"><i class="fab fa-youtube"></i> YouTube
+                Channel</a>
+            <a onclick="openExternalLink('{{ instagramUrl }}')" class="instagram"><i class="fab fa-instagram"></i>
+                Instagram</a>
+            <a href="{{ websiteUrl }}" class="website"><i class="fas fa-globe"></i> Visit Website</a>
+        </div>
+        <p style="margin-top: 30px; color: #666;">
+            After subscribing, contact our admin to activate your account.
+        </p>
+    </div>
+
+    <div id="expired-page" class="expired-page hidden">
+        <h1><span class="model-name">Evergreen</span> Alerts</h1>
+        <h2>Subscription Expired</h2>
+        <p>Your subscription has expired. Please renew to continue receiving trading alerts.</p>
+        <div class="social-links">
+            <a href="{{ telegramUrl }}" class="telegram"><i class="fab fa-telegram-plane"></i> Renew on Telegram</a>
+            <a onclick="openExternalLink('{{ youtubeUrl }}')" class="youtube"><i class="fab fa-youtube"></i> YouTube
+                Channel</a>
+            <a onclick="openExternalLink('{{ instagramUrl }}')" class="instagram"><i class="fab fa-instagram"></i>
+                Instagram</a>
+            <a href="{{ websiteUrl }}" class="website"><i class="fas fa-globe"></i> Visit Website</a>
+        </div>
+        <p style="margin-top: 30px; color: #666;">
+            Contact our admin for renewal options.
+        </p>
+    </div>
+
+    <div id="no-access-page" class="expired-page hidden">
+        <h1><span class="model-name">Evergreen</span> Alerts</h1>
+        <h2>Access Disabled</h2>
+        <p>Your access to <span class="model-name">Evergreen</span> alerts is currently disabled.</p>
+        <div class="social-links">
+            <a href="{{ telegramUrl }}" class="telegram"><i class="fab fa-telegram-plane"></i> Contact Support</a>
+            <a onclick="openExternalLink('{{ youtubeUrl }}')" class="youtube"><i class="fab fa-youtube"></i> YouTube
+                Channel</a>
+            <a onclick="openExternalLink('{{ instagramUrl }}')" class="instagram"><i class="fab fa-instagram"></i>
+                Instagram</a>
+            <a href="{{ websiteUrl }}" class="website"><i class="fas fa-globe"></i> Visit Website</a>
+        </div>
+        <p style="margin-top: 30px; color: #666;">
+            Please contact the admin to reactivate your access.
+        </p>
+    </div>
+
+    <div id="main-app" class="hidden">
+        <h1><span class="model-name">Evergreen</span> Alerts</h1>
+        <div id="status-message"></div>
+
+        <div class="section">
+            <h2>Currency Pairs Filters</h2>
+            <div id="currency-pairs-section" class="checkbox-group">
+                <!-- Symbols will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Commodity Filters</h2>
+            <div id="commodity-section" class="checkbox-group">
+                <!-- Symbols will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Crypto Filters</h2>
+            <div id="crypto-section" class="checkbox-group">
+                <!-- Symbols will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Indices Filters</h2>
+            <div id="indices-section" class="checkbox-group">
+                <!-- Symbols will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Futures Filters</h2>
+            <div id="futures-section" class="checkbox-group">
+                <!-- Symbols will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Timeframe Filters</h2>
+            <div id="timeframes-section" class="checkbox-group">
+                <!-- Timeframes will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Premium and Discount Filters</h2>
+            <div id="zone-section" class="checkbox-group">
+                <!-- Zone will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div id="cr-wrapper" class="section">
+            <h2>CR Filters</h2>
+            <div id="cr-section" class="checkbox-group">
+                <!-- CR will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div id="brk-wrapper" class="section">
+            <h2>BRK Filters</h2>
+            <div id="brk-section" class="checkbox-group">
+                <!-- BRK will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div id="cisd-wrapper" class="section">
+            <h2>CISD Filters</h2>
+            <div id="cisd-section" class="checkbox-group">
+                <!-- CISD will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div id="cisd-pcl-wrapper" class="section">
+            <h2>CISD PCL Filters</h2>
+            <div id="cisd-pcl-section" class="checkbox-group">
+                <!-- CISD PCL will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div id="lcy-wrapper" class="section">
+            <h2>Legacy No-Sweep Entry Filters</h2>
+            <div id="lcy-section" class="checkbox-group">
+                <!-- LCY will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div id="lcy-sweep-wrapper" class="section">
+            <h2>Legacy Sweep Entry Filters</h2>
+            <div id="lcy-sweep-section" class="checkbox-group">
+                <!-- LCY Sweep will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Direction Filters</h2>
+            <div id="directions-section" class="checkbox-group">
+                <!-- Directions will be loaded here dynamically -->
+            </div>
+        </div>
+
+        <button id="save-btn" onclick="saveSelections()">Save Preferences</button>
+        <button id="select-all-btn" onclick="selectAll()" style="background: #28a745; margin-top: 10px;">Select
+            All</button>
+        <button id="clear-all-btn" onclick="clearAll()" style="background: #dc3545; margin-top: 10px;">Clear
+            All</button>
+    </div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        let currentUser = null;
+        let userFilters = {};
+        let allFilters = {};
+        let currentModel = 'Evergreen'; // Default model
+
+        // Initialize Telegram Web App
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+
+        // Authenticate user on load
+        async function authenticateUser() {
+            try {
+                const response = await fetch('/api/miniapp/auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        initData: Telegram.WebApp.initData
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                // Always try to get model from result, defaulting to Evergreen
+                currentModel = result.model || 'Evergreen';
+                updateBranding(currentModel);
+
+                if (result.success) {
+                    currentUser = result.user;
+                    userFilters = result.filters || {};
+                    // currentModel already set
+
+
+                    // Flatten events object to array for easier frontend handling
+                    if (userFilters.events && !Array.isArray(userFilters.events)) {
+                        let flatEvents = [];
+                        Object.values(userFilters.events).forEach(arr => {
+                            if (Array.isArray(arr)) flatEvents.push(...arr);
+                        });
+                        userFilters.events = flatEvents;
+                    }
+
+                    await loadAllFilters();  // Load available filters
+                    showMainApp();
+                    renderFilters();
+                } else {
+                    if (result.status === 'not_found') {
+                        showInvitePage();
+                    } else if (result.status === 'expired') {
+                        showExpiredPage();
+                    } else if (result.status === 'no_access') {
+                        showNoAccessPage();
+                    } else if (result.status === 'invalid') {
+                        showError('Invalid authentication. Please reopen the app in Telegram.');
+                    } else {
+                        showError('Authentication failed: ' + (result.message || 'Unknown error'));
+                    }
+                }
+            } catch (error) {
+                console.error('Authentication error:', error);
+                showError('Connection error: ' + error.message);
+            }
+        }
+
+        async function loadAllFilters() {
+            try {
+                const response = await fetch(`/api/miniapp/filters?model=${currentModel}`);
+                allFilters = await response.json();
+            } catch (error) {
+                console.error('Error loading filter lists:', error);
+                showError('Failed to load filter options');
+            }
+        }
+
+        function renderFilters() {
+            renderFilterSection('currency_pairs', 'currency-pairs-section', allFilters.currency_pairs || []);
+            renderFilterSection('commodity', 'commodity-section', allFilters.commodity || []);
+            renderFilterSection('crypto', 'crypto-section', allFilters.crypto || []);
+            renderFilterSection('indices', 'indices-section', allFilters.indices || []);
+            renderFilterSection('futures', 'futures-section', allFilters.futures || []);
+            renderFilterSection('timeframes', 'timeframes-section', allFilters.timeframes || []);
+            renderFilterSection('zone', 'zone-section', allFilters.zone || []);
+
+
+            // Events are now a dictionary
+            if (allFilters.events && !Array.isArray(allFilters.events)) {
+                // Toggle and Render Evergreen
+                toggleSection('cr-wrapper', allFilters.events.CR);
+                if (allFilters.events.CR) renderFilterSection('events', 'cr-section', allFilters.events.CR);
+
+                toggleSection('brk-wrapper', allFilters.events.BRK);
+                if (allFilters.events.BRK) renderFilterSection('events', 'brk-section', allFilters.events.BRK);
+
+                toggleSection('cisd-wrapper', allFilters.events.CISD);
+                if (allFilters.events.CISD) renderFilterSection('events', 'cisd-section', allFilters.events.CISD);
+
+                toggleSection('cisd-pcl-wrapper', allFilters.events.CISD_PCL);
+                if (allFilters.events.CISD_PCL) renderFilterSection('events', 'cisd-pcl-section', allFilters.events.CISD_PCL);
+
+                // Toggle and Render Legacy
+                toggleSection('lcy-wrapper', allFilters.events.LCY);
+                if (allFilters.events.LCY) renderFilterSection('events', 'lcy-section', allFilters.events.LCY);
+
+                toggleSection('lcy-sweep-wrapper', allFilters.events.LCY_Sweep);
+                if (allFilters.events.LCY_Sweep) renderFilterSection('events', 'lcy-sweep-section', allFilters.events.LCY_Sweep);
+
+            } else {
+                // Fallback / legacy support
+                renderFilterSection('events', 'events-section', allFilters.events || []);
+            }
+
+            renderFilterSection('directions', 'directions-section', allFilters.directions || []);
+        }
+
+        function renderFilterSection(filterType, containerId, filterData) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+
+            // Handle Nested Structure (Entry, Filters, SMT)
+            if (filterData && typeof filterData === 'object' && !Array.isArray(filterData)) {
+                // Order: Entry -> Filters -> SMT
+                const categories = ['Entry', 'Filters', 'SMT'];
+
+                categories.forEach(category => {
+                    if (filterData[category] && filterData[category].length > 0) {
+
+                        // Handle Entry: Move Checkbox to Header (H2)
+                        if (category === 'Entry') {
+                            // Assumes Entry has only 1 item usually
+                            filterData['Entry'].forEach(filter => {
+                                // Find the H2 associated with this container
+                                // Container ID is like 'brk-section', wrapper is parent 'brk-wrapper', H2 is first child of wrapper
+                                // Or simpler: container.previousElementSibling is H2
+                                const header = container.previousElementSibling;
+                                if (header && header.tagName === 'H2') {
+                                    // Check if we already injected (to avoid duplicates on re-render)
+                                    if (!header.querySelector('input[type="checkbox"]')) {
+                                        // Create Checkbox
+                                        let filterName, filterValue;
+                                        if (typeof filter === 'object' && filter !== null) {
+                                            filterName = filter.label;
+                                            filterValue = filter.value;
+                                        } else {
+                                            filterName = filter;
+                                            filterValue = filter;
+                                        }
+
+                                        const checkbox = document.createElement('input');
+                                        checkbox.type = 'checkbox';
+                                        checkbox.id = `${filterType}_${filterValue.replace(/\s+/g, '')}`;
+
+                                        // Store actual DB column name for Select All
+                                        checkbox.dataset.filterValue = filterValue;
+
+                                        checkbox.checked = userFilters[filterType]?.includes(filterValue) || false;
+                                        checkbox.style.marginRight = '10px';
+                                        checkbox.addEventListener('change', () => updateFilter(filterType, filterValue, checkbox.checked));
+
+                                        // Prepend to Header
+                                        header.insertBefore(checkbox, header.firstChild);
+
+                                        // Make Header Clickable to toggle checkbox
+                                        // Be careful not to double-trigger if clicking checkbox itself
+                                        // header.style.cursor = 'pointer';
+                                        // header.addEventListener('click', (e) => {
+                                        //    if (e.target !== checkbox) checkbox.click();
+                                        // });
+                                    } else {
+                                        // Update checked state if already exists
+                                        let filterName, filterValue;
+                                        if (typeof filter === 'object' && filter !== null) {
+                                            filterValue = filter.value;
+                                        } else {
+                                            filterValue = filter;
+                                        }
+                                        const checkbox = header.querySelector('input[type="checkbox"]');
+                                        if (checkbox) {
+                                            checkbox.checked = userFilters[filterType]?.includes(filterValue) || false;
+                                        }
+                                    }
+                                }
+                            });
+                            // Do NOT render Entry items in the container
+                            return;
+                        }
+
+                        // Create Sub-header (Filters, SMT)
+                        if (filterData[category].length > 0) {
+                            const subHeader = document.createElement('h4');
+                            subHeader.textContent = category;
+                            // Make sub-header span full grid width
+                            subHeader.style.gridColumn = '1 / -1';
+
+                            subHeader.style.marginTop = '10px';
+                            subHeader.style.marginBottom = '5px';
+                            subHeader.style.color = '#555';
+                            subHeader.style.fontSize = '14px';
+                            subHeader.style.borderBottom = '1px solid #eee';
+                            container.appendChild(subHeader);
+                        }
+
+                        // Render items for this category
+                        filterData[category].forEach(filter => {
+                            let filterLabel = typeof filter === 'object' && filter !== null ? filter.label : filter;
+
+                            // Inject separator before "Mitigation" in SMT category
+                            if (category === 'SMT' && filterLabel === 'Mitigation') {
+                                const separator = document.createElement('div');
+                                separator.style.gridColumn = '1 / -1';
+                                separator.style.height = '0.5px';
+                                separator.style.background = '#eee';
+                                separator.style.margin = '5px 0 10px 0';
+                                container.appendChild(separator);
+                            }
+
+                            createCheckboxItem(container, filterType, filter);
+                        });
+                    }
+                });
+            }
+            // Handle Standard Array (legacy or simple lists)
+            else if (Array.isArray(filterData)) {
+                filterData.forEach(filter => {
+                    createCheckboxItem(container, filterType, filter);
+                });
+            }
+        }
+
+        function createCheckboxItem(container, filterType, filter) {
+            const div = document.createElement('div');
+            div.className = 'checkbox-item';
+
+            // Handle Object (label/value) vs String
+            let filterName, filterValue;
+            if (typeof filter === 'object' && filter !== null) {
+                filterName = filter.label;
+                filterValue = filter.value;
+            } else {
+                filterName = filter;
+                filterValue = filter;
+            }
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            // Use Value for ID calculation (unique DB column name)
+            // But strip spaces if present in value (though value should be DB col)
+            checkbox.id = `${filterType}_${filterValue.replace(/\s+/g, '')}`;
+
+            // Store the actual DB column name directly on the element for Select All / Clear All
+            checkbox.dataset.filterValue = filterValue;
+
+            // Checks if userFilters (list of DB cols) includes this value
+            checkbox.checked = userFilters[filterType]?.includes(filterValue) || false;
+
+            // On Change: Send filterValue (DB col) to backend
+            checkbox.addEventListener('change', () => updateFilter(filterType, filterValue, checkbox.checked));
+
+            const label = document.createElement('label');
+            label.htmlFor = checkbox.id;
+            label.textContent = filterName; // Display clean label
+
+            div.appendChild(checkbox);
+            div.appendChild(label);
+            container.appendChild(div);
+        }
+
+        async function updateFilter(filterType, filterName, enabled) {
+            try {
+                const response = await fetch(`/api/miniapp/filters/${currentUser.id}/${filterType}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filter: filterName,
+                        enabled: enabled,
+                        model: currentModel // Send model with update
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    // Update local state
+                    if (!userFilters[filterType]) userFilters[filterType] = [];
+                    if (enabled) {
+                        if (!userFilters[filterType].includes(filterName)) {
+                            userFilters[filterType].push(filterName);
+                        }
+                    } else {
+                        userFilters[filterType] = userFilters[filterType].filter(f => f !== filterName);
+                    }
+                } else {
+                    showMessage('Failed to update preference', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating filter:', error);
+                showMessage('Connection error', 'error');
+            }
+        }
+
+        function saveSelections() {
+            showMessage('All preferences saved successfully!', 'success');
+            Telegram.WebApp.showAlert('Preferences saved successfully!');
+        }
+
+        function selectAll() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const changes = [];
+            checkboxes.forEach(cb => {
+                if (!cb.checked && cb.dataset.filterValue) {
+                    cb.checked = true;
+                    changes.push({ filterName: cb.dataset.filterValue, enabled: true });
+                }
+            });
+            batchUpdateFilters(changes, 'All options selected');
+        }
+
+        function clearAll() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const changes = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked && cb.dataset.filterValue) {
+                    cb.checked = false;
+                    changes.push({ filterName: cb.dataset.filterValue, enabled: false });
+                }
+            });
+            batchUpdateFilters(changes, 'All options cleared');
+        }
+
+        async function batchUpdateFilters(changes, successMessage) {
+            if (!changes.length) return; // Don't send a request if nothing changed
+
+            try {
+                const response = await fetch(`/api/miniapp/filters/batch_update/${currentUser.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        changes: changes,
+                        model: currentModel // Send model with batch update
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(successMessage, 'success');
+                } else {
+                    showMessage('Failed to save all preferences.', 'error');
+                }
+            } catch (error) {
+                console.error('Batch update error:', error);
+                showMessage('Connection error while saving.', 'error');
+            }
+        }
+
+        function showLoading() {
+            hideAllSections();
+            document.getElementById('loading').classList.remove('hidden');
+        }
+
+        function showInvitePage() {
+            hideAllSections();
+            document.getElementById('invite-page').classList.remove('hidden');
+        }
+
+        function showExpiredPage() {
+            hideAllSections();
+            document.getElementById('expired-page').classList.remove('hidden');
+        }
+
+        function showNoAccessPage() {
+            hideAllSections();
+            document.getElementById('no-access-page').classList.remove('hidden');
+        }
+
+        function showMainApp() {
+            hideAllSections();
+            document.getElementById('main-app').classList.remove('hidden');
+        }
+
+        function openExternalLink(url) {
+            if (Telegram.WebApp && Telegram.WebApp.openLink) {
+                Telegram.WebApp.openLink(url, { try_instant_view: true });  // Opens in browser or instant view if possible
+            } else {
+                window.open(url, '_blank');  // Fallback for non-Telegram environments
+            }
+        }
+
+        function showError(message) {
+            hideAllSections();
+            document.body.innerHTML = `
+                <div class="error">
+                    <h1>${currentModel} Alerts</h1>
+                    <p>${message}</p>
+                <div class="loading">
+                    <h1><span class="model-name">${currentModel}</span> Alerts</h1>
+                    <p style="color: red;">${message}</p>
+                </div>
+            `;
+        }
+
+        function updateBranding(model) {
+            document.title = `${model} Alerts`;
+            document.querySelectorAll('.model-name').forEach(el => {
+                el.textContent = model;
+            });
+        }
+
+        function hideAllSections() {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('invite-page').classList.add('hidden');
+            document.getElementById('expired-page').classList.add('hidden');
+            document.getElementById('no-access-page').classList.add('hidden');
+            document.getElementById('main-app').classList.add('hidden');
+        }
+
+        function showMessage(message, type) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.innerHTML = `<div class="status-${type}">${message}</div>`;
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 3000);
+        }
+
+        function toggleSection(wrapperId, data) {
+            const el = document.getElementById(wrapperId);
+            if (el) {
+                // Check if data exists and is not empty (for arrays) or has keys (for objects)
+                // If nested structure (Entry/Filters/SMT), check if any sub-array has items.
+                let hasItems = false;
+                if (data) {
+                    if (Array.isArray(data)) {
+                        hasItems = data.length > 0;
+                    } else if (typeof data === 'object') {
+                        // Check Entry, Filters, SMT
+                        if (data.Entry && data.Entry.length > 0) hasItems = true;
+                        if (data.Filters && data.Filters.length > 0) hasItems = true;
+                        if (data.SMT && data.SMT.length > 0) hasItems = true;
+                    }
+                }
+                el.style.display = hasItems ? 'block' : 'none';
+            }
+        }
+
+        // Start authentication when page loads
+        authenticateUser();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,267 @@
+==========================
+FRAGMENT 1: openProductPage (lines ~843-962)
+==========================
+        async function openProductPage(product) {
+            currentProduct = product;
+            const overlay = document.getElementById('product-modal-overlay');
+            const contentEl = document.getElementById('product-view-content');
+            const heroSection = overlay.querySelector('.hero-section');
+
+            heroSection.style.backgroundImage = `url('${product.image || 'https://via.placeholder.com/1600x400?text=No+Image'}')`;
+
+            const isInCart = cartState.some(item => item.id == product.id && item.product_section == product.productSection);
+            const isPurchased = product.isPurchased;
+
+            // Open popup immediately
+            let html = '';
+            if (product.type === 'Course' && isPurchased) {
+                html = buildLoadingView(product);
+            } else if (product.type === 'Course') {
+                html = buildPurchaseView(product, isInCart);
+            } else if (product.type === 'Indicator') {
+                html = buildIndicatorView(product, isInCart, isPurchased);
+            } else if (product.type === 'Bot') {
+                html = buildBotView(product, isInCart, isPurchased);
+            }
+
+            contentEl.innerHTML = html;
+
+            // Move Go to Course button to fixed bottom bar
+            fixGoCourseButton();
+
+            // Description expand/collapse
+            const desc = contentEl.querySelector('.pv-description');
+            if (desc) {
+                desc.addEventListener('click', () => desc.classList.toggle('expanded'));
+            }
+
+            overlay.classList.remove('hidden');
+            document.body.classList.add('product-modal-open');
+            void overlay.offsetWidth;
+            overlay.classList.remove('opacity-0');
+            overlay.classList.add('opacity-100');
+            const content = document.getElementById('product-modal-content');
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+
+            // Fetch enrollment status in background for purchased courses
+            if (product.type === 'Course' && isPurchased) {
+                // Force browser to paint the spinner before fetching
+                await new Promise(r => requestAnimationFrame(r));
+
+                enrollmentStatus = null;
+                try {
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        const res = await fetch(`/api/enrollment-status/${product.id}`, {
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (res.ok) {
+                            enrollmentStatus = await res.json();
+                        } else {
+                            throw new Error('Failed to fetch');
+                        }
+                    } else {
+                        throw new Error('No token');
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch enrollment status:", e);
+                    const timelineContainer = document.getElementById('pv-timeline-container');
+                    if (timelineContainer) {
+                        timelineContainer.className = 'pv-timeline pv-timeline-error';
+                        timelineContainer.innerHTML = `
+                            <div>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                Failed to load timeline
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+                // Re-render timeline with actual data
+                const timelineHtml = buildTimelineOnly(product);
+                const timelineContainer = document.getElementById('pv-timeline-container');
+                if (timelineContainer) {
+                    timelineContainer.outerHTML = timelineHtml;
+                }
+                // Update progress bar
+                const progressPct = (enrollmentStatus && enrollmentStatus.progress !== undefined) ? enrollmentStatus.progress : 0;
+                const progressSection = contentEl.querySelector('.pv-progress-section');
+                if (progressSection) {
+                    progressSection.outerHTML = `
+                        <div class="pv-progress-section">
+                            <div class="pv-progress-header">
+                                <span>Progress</span>
+                                <span>${progressPct}%</span>
+                            </div>
+                            <div class="pv-progress-track">
+                                <div class="pv-progress-fill" style="width: ${progressPct}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+==========================
+FRAGMENT 2: handleCardClick (lines ~1457-1536)
+==========================
+        function handleCardClick(event, cardElement) {
+            if (event.target.closest('button')) return;
+
+            const product = {
+                id: cardElement.dataset.id,
+                title: cardElement.dataset.title,
+                description: cardElement.dataset.description,
+                price: parseFloat(cardElement.dataset.price),
+                image: cardElement.dataset.image,
+                type: cardElement.dataset.type,
+                productSection: parseInt(cardElement.dataset.section),
+                isPurchased: cardElement.dataset.purchased === 'true',
+                details: {}
+            };
+
+            if (product.type === 'Course') {
+                let chapters = [];
+                if (cardElement.dataset.chapters) {
+                    chapters = cardElement.dataset.chapters.split('|').filter(Boolean).map(entry => {
+                        const [idx, ...rest] = entry.split(':');
+                        return { chapter_index: parseInt(idx), title: rest.join(':') };
+                    });
+                }
+                product.details = {
+                    scheduled: cardElement.dataset.scheduled,
+                    duration: cardElement.dataset.duration,
+                    link: cardElement.dataset.link,
+                    chapters: chapters
+                };
+            }
+
+            openProductPage(product);
+        }
+
+==========================
+FRAGMENT 3: Course cards rendering (lines ~2025-2109)
+==========================
+                if (!Array.isArray(courses)) {
+                    throw new Error("Invalid response format");
+                }
+
+                if (courses.length === 0 && !append) {
+                    actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500 font-medium">No courses available yet. Upload some via the dashboard!</div>';
+                } else {
+                    courses.forEach(course => {
+                        const isPurchased = purchasedCourseIds.includes(course.id);
+                        const isInCart = cartState.some(item => item.id == course.id);
+                        const cartBtnClass = isInCart ? "cart-btn ml-2 add-to-cart-btn added" : "cart-btn ml-2 add-to-cart-btn";
+
+                        const chaptersJson = (course.chapters || []).map(ch => `${ch.chapter_index}:${ch.title.replace(/"/g, '&quot;')}`).join('|');
+
+                        let descriptionText = course.description || '';
+                        let descriptionTitle = course.description || '';
+                        if (isPurchased && course.next_chapter_title) {
+                            const truncatedTitle = course.next_chapter_title.length > 30 ? course.next_chapter_title.substring(0, 30) + '...' : course.next_chapter_title;
+                            const chIdx = course.next_chapter_index != null ? course.next_chapter_index : '';
+                            descriptionText = `Chapter ${chIdx}: ${truncatedTitle}`;
+                            descriptionTitle = `Chapter ${chIdx}: ${course.next_chapter_title}`;
+                        } else if (isPurchased && course.chapters && course.chapters.length > 0) {
+                            const firstCh = course.chapters[0];
+                            const truncatedTitle = firstCh.title.length > 30 ? firstCh.title.substring(0, 30) + '...' : firstCh.title;
+                            descriptionText = `Chapter ${firstCh.chapter_index}: ${truncatedTitle}`;
+                            if (course.chapters.length > 1) {
+                                descriptionText += ` +${course.chapters.length - 1} more`;
+                            }
+                            descriptionTitle = course.chapters.map(ch => `Chapter ${ch.chapter_index}: ${ch.title}`).join('\n');
+                        }
+
+                        let priceTagHtml = '';
+                        let actionBtnHtml = '';
+
+                        if (isPurchased) {
+                            priceTagHtml = `
+                                <div class="price-tag countdown-wrapper" data-scheduled="${course.scheduled_at}" data-duration="${course.estimated_duration}" data-ongoing="${course.is_ongoing || false}">
+                                    <i class="ph ph-clock text-brand font-bold"></i>
+                                    <span class="timer-text font-bold text-[12px]">Calculating...</span>
+                                </div>`;
+                            
+                            actionBtnHtml = `
+                                <button class="cart-btn ml-2 join-btn opacity-40 bg-gray-200 cursor-not-allowed pointer-events-none" aria-label="Not Started" data-link="${course.course_link}">
+                                    <i class="ph ph-play-circle text-xl text-gray-600"></i>
+                                </button>`;
+                        } else {
+                            priceTagHtml = `
+                                <div class="price-tag">
+                                    <span class="text-brand font-bold">$</span>
+                                    <span>${course.price.toFixed(2)}</span>
+                                </div>`;
+                            
+                            actionBtnHtml = `
+                                <button class="${cartBtnClass}" onclick="toggleCart(this, event, '${course.product_uuid}', '${course.title.replace(/'/g, "\\'")}', ${course.price}, '${course.course_thumbnail}', 'Course', 1)" aria-label="Add to Cart">
+                                    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle>
+                                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                    </svg>
+                                </button>`;
+                        }
+
+                        const cardHtml = `
+                            <div class="nft-card" data-id="${course.product_uuid}" data-title="${course.title.replace(/"/g, '&quot;')}" data-description="${(course.description || '').replace(/"/g, '&quot;')}" data-price="${course.price}" data-image="${course.course_thumbnail}" data-type="Course" data-section="1" data-purchased="${isPurchased}" data-scheduled="${course.scheduled_at || ''}" data-duration="${course.estimated_duration || ''}" data-link="${course.course_link || ''}" data-chapters="${chaptersJson}" onclick="handleCardClick(event, this)">
+                                <div class="image-container">
+                                    <img src="${course.course_thumbnail}" alt="Course Thumbnail" class="nft-image">
+                                    <button class="like-btn" onclick="toggleLike(this, event)" aria-label="Like">
+                                        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                        </svg>
+                                    </button>
+                                    ${priceTagHtml}
+                                </div>
+                                <div class="info-section">
+                                    <div class="text-content">
+                                        <h3 class="title" title="${course.title}">${course.title}</h3>
+                                        <p class="description" title="${descriptionTitle}">${descriptionText}</p>
+                                    </div>
+                                    ${actionBtnHtml}
+                                </div>
+                            </div>
+                        `;
+                        actualCards.innerHTML += cardHtml;
+                    });
+
+                    hasMoreCourses = courses.length === courseLimit;
+
+==========================
+FRAGMENT 4: My-library rendering (lines ~2885-2939)
+==========================
+            try {
+                const response = await fetch('/my-library', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!response.ok) throw new Error('Failed to load library');
+                const data = await response.json();
+
+                // Build course HTML
+                let coursesHtml = '';
+                if (data.courses && data.courses.length > 0) {
+                    data.courses.forEach(course => {
+                        const timerHtml = course.scheduled_at
+                            ? `<div class="countdown-wrapper flex items-center gap-1 text-brand" data-scheduled="${course.scheduled_at}" data-duration="${course.estimated_duration || '2 hours'}" data-ongoing="${course.is_ongoing || false}">
+                                 <i class="ph ph-clock font-bold text-xs"></i>
+                                 <span class="timer-text text-xs font-bold">Calculating...</span>
+                               </div>`
+                            : `<div class="text-xs font-bold text-gray-400">Not scheduled</div>`;
+                        coursesHtml += `
+                            <div class="flex items-center justify-between p-3 bg-[#F8F9FB] border border-gray-100 rounded-2xl hover:border-gray-200 transition-all">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <img src="${course.thumbnail || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-lg object-cover shadow-sm shrink-0">
+                                    <div class="min-w-0">
+                                        <p class="text-[13px] font-bold text-gray-900 truncate">${course.title}</p>
+                                        <p class="text-[11px] text-gray-500 truncate">${course.description || 'No description'}</p>
+                                    </div>
+                                </div>
+                                ${timerHtml}
+                            </div>
+                        `;
+                    });
+                } else {
+                    coursesHtml = '<p class="text-sm text-gray-400 mt-4 text-center">No purchased courses yet.</p>';
+                }

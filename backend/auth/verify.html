@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ebolt Verify Email</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: '#111827',
+                        gray: {
+                            50: '#f9fafb',
+                            100: '#f3f4f6',
+                            200: '#e5e7eb',
+                            300: '#d1d5db',
+                            400: '#9ca3af',
+                            500: '#6b7280',
+                            600: '#4b5563',
+                            700: '#374151',
+                            800: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        }
+                    },
+                    boxShadow: {
+                        'card': '0 25px 50px -12px rgba(0, 0, 0, 0.15), 0 0 40px rgba(255, 255, 255, 0.5) inset',
+                        'icon': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                        'button-hover': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    },
+                    transitionTimingFunction: {
+                        'out-expo': 'cubic-bezier(0.16, 1, 0.3, 1)',
+                        'bounce-sm': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #aed6f1;
+            background-image: 
+                linear-gradient(to bottom, rgba(160, 210, 245, 0.8), rgba(255, 255, 255, 0.9)),
+                url('https://images.unsplash.com/photo-1513002749550-c59d786b8e6c?q=80&w=2574&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        @keyframes pulseRings {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+            50% { transform: translate(-50%, -50%) scale(1.05); opacity: 1; }
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .force-spin {
+            animation: spin 1s linear infinite !important;
+        }
+
+        .bg-circles {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 100vw;
+            height: 100vw;
+            min-width: 1000px;
+            min-height: 1000px;
+            pointer-events: none;
+            z-index: 0;
+            background-image: 
+                radial-gradient(circle, transparent 20%, rgba(255, 255, 255, 0.4) 20.2%, transparent 20.5%),
+                radial-gradient(circle, transparent 35%, rgba(255, 255, 255, 0.3) 35.2%, transparent 35.5%),
+                radial-gradient(circle, transparent 50%, rgba(255, 255, 255, 0.2) 50.2%, transparent 50.5%);
+            animation: pulseRings 20s ease-in-out infinite;
+        }
+
+        @keyframes fadeSlideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        @keyframes fadeSlideRight {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .animate-card { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-logo { animation: fadeSlideRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        .stagger-1 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards; opacity: 0; }
+        .stagger-2 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards; opacity: 0; }
+        .stagger-3 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards; opacity: 0; }
+        .stagger-4 { animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards; opacity: 0; }
+
+        .status-icon { transition: all 0.3s ease-out; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center text-gray-900 antialiased relative overflow-hidden">
+
+    <!-- Background Circles -->
+    <div class="bg-circles"></div>
+
+    <!-- Top Left Logo -->
+    <div class="absolute top-6 left-6 z-20 flex items-center gap-2 animate-logo">
+        <div class="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center hover:scale-105 hover:rotate-3 transition-transform duration-300 ease-bounce-sm cursor-pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="white"/>
+            </svg>
+        </div>
+        <span class="font-bold text-xl tracking-tight text-gray-900">Ebolt</span>
+    </div>
+
+    <!-- Main Card Container -->
+    <main class="w-full max-w-[420px] bg-white/95 backdrop-blur-md rounded-[3rem] shadow-card p-10 z-10 mx-4 relative overflow-hidden border border-white/40 animate-card my-8 text-center">
+        
+        <div class="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-[#eaf5fc] to-transparent pointer-events-none opacity-60"></div>
+
+        <div class="relative z-10 flex flex-col items-center">
+            
+            <!-- Dynamic Icon Container -->
+            <div id="main-icon" class="stagger-1 w-16 h-16 bg-white rounded-2xl shadow-icon flex items-center justify-center mb-6 border border-gray-50">
+                <!-- Mail Icon (default) -->
+                <svg id="icon-mail" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-gray-800">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                    <polyline points="22,6 12,13 2,6"></polyline>
+                </svg>
+                <!-- Spinner -->
+                <svg id="icon-spin" class="w-8 h-8 text-gray-200 force-spin fill-brand hidden" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/>
+                    <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/>
+                </svg>
+                <!-- Alert -->
+                <svg id="icon-alert" class="w-7 h-7 text-amber-500 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <!-- Success -->
+                <svg id="icon-success" class="w-7 h-7 text-green-500 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+
+            <!-- Title -->
+            <h1 id="status-title" class="stagger-1 text-2xl font-semibold mb-3">Email verification</h1>
+            
+            <!-- Description -->
+            <div class="stagger-2 mb-6">
+                <p id="status-desc" class="text-[14px] text-gray-500 leading-relaxed px-2">
+                    We're verifying your email address. Please wait a moment.
+                </p>
+            </div>
+
+            <!-- Action Area -->
+            <div id="action-area" class="stagger-3 w-full pt-2">
+                <!-- Primary Action Button -->
+                <button id="primary-btn" class="hidden w-full bg-[#232326] text-white font-medium text-[15px] py-3.5 rounded-xl transition-all duration-300 ease-out-expo hover:bg-black hover:-translate-y-[2px] hover:shadow-button-hover active:translate-y-[1px] active:scale-[0.98]">
+                    Continue to Login
+                </button>
+
+                <!-- Email Input for Resend -->
+                <div id="email-input-group" class="hidden w-full space-y-3">
+                    <div class="flex items-center bg-gray-100 rounded-xl px-4 py-3 border border-transparent focus-within:border-gray-200 focus-within:bg-white focus-within:shadow-sm transition-all duration-300">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 mr-3">
+                            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                        </svg>
+                        <input id="email-input" type="email" placeholder="Enter your email" class="w-full bg-transparent border-none outline-none text-[15px] placeholder-gray-400 text-gray-900">
+                    </div>
+                    <button id="resend-submit-btn" class="w-full bg-[#232326] text-white font-medium text-[15px] py-3.5 rounded-xl transition-all duration-300 ease-out-expo hover:bg-black hover:-translate-y-[2px] hover:shadow-button-hover active:translate-y-[1px] active:scale-[0.98]">
+                        Resend Verification Email
+                    </button>
+                </div>
+            </div>
+
+            <!-- Resend / Timer Section -->
+            <div class="stagger-4 flex items-center justify-center gap-2 mt-8 h-6">
+                <!-- Status Icons Container -->
+                <div class="relative w-4 h-4 flex items-center justify-center shrink-0">
+                    <!-- Spinner -->
+                    <svg id="resend-spin" class="w-4 h-4 text-gray-200 force-spin fill-brand absolute status-icon opacity-100 scale-100" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor"/>
+                        <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill"/>
+                    </svg>
+
+                    <!-- Alert -->
+                    <svg id="resend-alert" class="w-4 h-4 text-amber-500 absolute status-icon opacity-0 scale-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+
+                    <!-- Tick -->
+                    <svg id="resend-tick" class="w-4 h-4 text-green-500 absolute status-icon opacity-0 scale-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+
+                <!-- Resend Button / Status Text -->
+                <button id="resend-btn" disabled class="text-[14px] text-gray-900 font-medium opacity-50 cursor-not-allowed transition-all duration-300 focus:outline-none">
+                    <span id="resend-text">Didn't receive? Resend</span>
+                    <span id="timer-text" class="font-normal">(30s)</span>
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // DOM Elements
+        const els = {
+            iconMail: document.getElementById('icon-mail'),
+            iconSpin: document.getElementById('icon-spin'),
+            iconAlert: document.getElementById('icon-alert'),
+            iconSuccess: document.getElementById('icon-success'),
+            statusTitle: document.getElementById('status-title'),
+            statusDesc: document.getElementById('status-desc'),
+            primaryBtn: document.getElementById('primary-btn'),
+            emailInputGroup: document.getElementById('email-input-group'),
+            emailInput: document.getElementById('email-input'),
+            resendSubmitBtn: document.getElementById('resend-submit-btn'),
+            resendSpin: document.getElementById('resend-spin'),
+            resendAlert: document.getElementById('resend-alert'),
+            resendTick: document.getElementById('resend-tick'),
+            resendBtn: document.getElementById('resend-btn'),
+            resendText: document.getElementById('resend-text'),
+            timerText: document.getElementById('timer-text'),
+        };
+
+        let countdownInterval;
+        const RESEND_TIME = 30;
+        let userEmail = '';
+        let userToken = '';
+
+        // Parse URL params
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                token: params.get('token'),
+                email: params.get('email'),
+                type: params.get('type') || 'user'
+            };
+        }
+
+        // Icon helpers
+        function showIcon(icon) { icon.classList.remove('hidden'); }
+        function hideIcon(icon) { icon.classList.add('hidden'); }
+
+        function setMainIcon(state) {
+            [els.iconMail, els.iconSpin, els.iconAlert, els.iconSuccess].forEach(hideIcon);
+            if (state === 'spin') showIcon(els.iconSpin);
+            else if (state === 'alert') showIcon(els.iconAlert);
+            else if (state === 'success') showIcon(els.iconSuccess);
+            else showIcon(els.iconMail);
+        }
+
+        function setResendIcon(state) {
+            // Reset all
+            [els.resendSpin, els.resendAlert, els.resendTick].forEach(icon => {
+                icon.classList.remove('opacity-100', 'scale-100');
+                icon.classList.add('opacity-0', 'scale-50');
+            });
+            
+            let active;
+            if (state === 'spin') active = els.resendSpin;
+            else if (state === 'alert') active = els.resendAlert;
+            else if (state === 'success') active = els.resendTick;
+            
+            if (active) {
+                active.classList.remove('opacity-0', 'scale-50');
+                active.classList.add('opacity-100', 'scale-100');
+            }
+        }
+
+        // Timer logic
+        function startTimer(seconds) {
+            clearInterval(countdownInterval);
+            setResendIcon('spin');
+            
+            els.resendBtn.disabled = true;
+            els.resendBtn.className = "text-[14px] text-gray-900 font-medium opacity-50 cursor-not-allowed transition-all duration-300 focus:outline-none";
+            
+            let timeLeft = seconds;
+            els.timerText.style.display = 'inline';
+            els.timerText.textContent = `(${timeLeft}s)`;
+
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                els.timerText.textContent = `(${timeLeft}s)`;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    setResendIcon('alert');
+                    els.timerText.style.display = 'none';
+                    els.resendBtn.disabled = false;
+                    els.resendBtn.className = "text-[14px] text-gray-900 font-semibold opacity-100 cursor-pointer hover:underline underline-offset-2 focus:outline-none";
+                }
+            }, 1000);
+        }
+
+        // UI States
+        function setVerifyingState() {
+            setMainIcon('spin');
+            els.statusTitle.textContent = 'Verifying your email';
+            els.statusDesc.textContent = userEmail 
+                ? `We're verifying the link sent to ${userEmail}. Please wait...`
+                : 'Please wait while we verify your email...';
+            els.primaryBtn.classList.add('hidden');
+            els.emailInputGroup.classList.add('hidden');
+            startTimer(RESEND_TIME);
+        }
+
+        function setSuccessState() {
+            clearInterval(countdownInterval);
+            setMainIcon('success');
+            setResendIcon('success');
+            
+            els.statusTitle.textContent = 'Email verified!';
+            els.statusDesc.textContent = 'Your email has been successfully verified. You can now log in to your account.';
+            
+            els.primaryBtn.textContent = 'Continue to Login';
+            els.primaryBtn.classList.remove('hidden');
+            els.primaryBtn.onclick = () => window.location.href = '/auth/login';
+            
+            els.emailInputGroup.classList.add('hidden');
+            
+            els.resendText.textContent = 'Verified successfully';
+            els.timerText.style.display = 'none';
+            els.resendBtn.disabled = true;
+            els.resendBtn.className = "text-[14px] text-green-600 font-semibold opacity-100 cursor-default focus:outline-none";
+        }
+
+        function setExpiredState(errorMsg) {
+            clearInterval(countdownInterval);
+            setMainIcon('alert');
+            setResendIcon('alert');
+            
+            els.statusTitle.textContent = 'Link expired';
+            els.statusDesc.textContent = errorMsg || 'The verification link has expired or is invalid. Please request a new one.';
+            
+            els.primaryBtn.classList.add('hidden');
+            els.emailInputGroup.classList.remove('hidden');
+            if (userEmail) els.emailInput.value = userEmail;
+            
+            els.timerText.style.display = 'none';
+            els.resendBtn.disabled = true;
+            els.resendBtn.className = "text-[14px] text-gray-900 font-medium opacity-50 cursor-not-allowed transition-all duration-300 focus:outline-none";
+        }
+
+        function setErrorState(errorMsg) {
+            clearInterval(countdownInterval);
+            setMainIcon('alert');
+            setResendIcon('alert');
+            
+            els.statusTitle.textContent = 'Something went wrong';
+            els.statusDesc.textContent = errorMsg || 'An error occurred. Please try again or contact support.';
+            
+            els.primaryBtn.classList.add('hidden');
+            els.emailInputGroup.classList.remove('hidden');
+            if (userEmail) els.emailInput.value = userEmail;
+            
+            els.timerText.style.display = 'none';
+            els.resendBtn.disabled = true;
+        }
+
+        // API Calls
+        async function verifyEmail(token, type) {
+            try {
+                const res = await fetch(`/verify-email?token=${encodeURIComponent(token)}&type=${encodeURIComponent(type)}`);
+                const data = await res.json();
+                
+                if (res.ok && data.success) {
+                    setSuccessState();
+                } else {
+                    setExpiredState(data.detail || 'Invalid or expired verification token.');
+                }
+            } catch (err) {
+                setErrorState('Network error. Please check your connection and try again.');
+            }
+        }
+
+        async function resendVerification(email, type) {
+            try {
+                setResendIcon('spin');
+                els.resendBtn.disabled = true;
+                els.resendText.textContent = 'Sending...';
+                els.timerText.style.display = 'none';
+                
+                const res = await fetch('/resend-verification', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, type })
+                });
+                
+                const data = await res.json();
+                
+                if (res.ok && data.success) {
+                    setResendIcon('success');
+                    els.resendText.textContent = 'Email sent!';
+                    els.statusDesc.textContent = 'A new verification email has been sent. Please check your inbox.';
+                    startTimer(RESEND_TIME);
+                } else {
+                    setResendIcon('alert');
+                    els.resendText.textContent = "Didn't receive? Resend";
+                    els.statusDesc.textContent = data.detail || 'Failed to resend. Please try again.';
+                    els.timerText.style.display = 'none';
+                    els.resendBtn.disabled = false;
+                }
+            } catch (err) {
+                setResendIcon('alert');
+                els.resendText.textContent = "Didn't receive? Resend";
+                els.statusDesc.textContent = 'Network error. Please check your connection.';
+                els.timerText.style.display = 'none';
+                els.resendBtn.disabled = false;
+            }
+        }
+
+        // Event Listeners
+        els.resendBtn.addEventListener('click', () => {
+            if (!els.resendBtn.disabled) {
+                if (userEmail) {
+                    resendVerification(userEmail, 'user');
+                } else {
+                    // Show email input if we don't have it
+                    els.emailInputGroup.classList.remove('hidden');
+                    els.emailInput.focus();
+                }
+            }
+        });
+
+        els.resendSubmitBtn.addEventListener('click', () => {
+            const email = els.emailInput.value.trim();
+            if (!email) {
+                els.statusDesc.textContent = 'Please enter your email address.';
+                return;
+            }
+            userEmail = email;
+            resendVerification(email, 'user');
+        });
+
+        // On page load
+        window.addEventListener('load', () => {
+            const params = getUrlParams();
+            userToken = params.token || '';
+            userEmail = params.email || '';
+            
+            if (userToken) {
+                setVerifyingState();
+                verifyEmail(userToken, params.type);
+            } else {
+                // No token in URL - show email input to request verification
+                setExpiredState('No verification token found. Please enter your email to request a new verification link.');
+            }
+        });
+    </script>
+</body>
+</html>

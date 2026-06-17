@@ -1,0 +1,3407 @@
+<!DOCTYPE html>
+
+
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Dashboard UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'], },
+                    colors: {
+                        appBg: '#F3F4F9',
+                        brand: { DEFAULT: '#4C4AE3', light: '#EBEBFF', dark: '#1C1E26' },
+                        textMain: '#1F2937', textMuted: '#6B7280',
+                        success: { text: '#10B981', bg: '#D1FAE5' },
+                        danger: { text: '#EF4444', bg: '#FEE2E2' }
+                    },
+                    boxShadow: {
+                        'card': '0 4px 20px -2px rgba(0, 0, 0, 0.03)',
+                        'brand-glow': '0 10px 25px -5px rgba(76, 74, 227, 0.4)',
+                        'modal': '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                    },
+                    borderRadius: { '2.5xl': '1.25rem', '3xl': '1.5rem', }
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --bg-color: #F4F7FE; --card-bg: #FFFFFF; --text-primary: #11142D;
+            --text-secondary: #9E9FA8; --accent-blue: #4B68FF; --card-radius: 20px; --img-radius: 16px;
+        }
+
+        .cards-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 20px; width: 100%; align-content: start; }
+        .nft-card { background-color: var(--card-bg); border-radius: var(--card-radius); padding: 12px; width: 100%; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03); transition: transform 0.3s ease, box-shadow 0.3s ease; cursor: pointer; display: flex; flex-direction: column; }
+        .nft-card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.06); }
+        .image-container { position: relative; width: 100%; height: 170px; border-radius: var(--img-radius); overflow: hidden; flex-shrink: 0; }
+        .nft-image { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; }
+        .nft-card:hover .nft-image { transform: scale(1.05); }
+
+        .like-btn { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.4); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; z-index: 2; }
+        .like-btn:hover { background: rgba(255, 255, 255, 0.4); }
+        .like-btn svg { width: 14px; height: 14px; fill: none; stroke: #FFFFFF; stroke-width: 2; transition: fill 0.2s ease, stroke 0.2s ease; }
+        .like-btn.active svg { fill: #FFFFFF; stroke: #FFFFFF; }
+        
+        .cart-btn { width: 32px; height: 32px; border-radius: 50%; background: #F3F4F9; border: 1px solid transparent; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; flex-shrink: 0; }
+        .cart-btn:not(.cursor-not-allowed):hover { background: #EBEBFF; cursor: pointer; }
+        .cart-btn svg { width: 15px; height: 15px; fill: none; stroke: #4C4AE3; stroke-width: 2; transition: all 0.2s ease; }
+        .cart-btn.added { background: #10B981; border-color: #10B981; }
+        .cart-btn.added svg { stroke: #FFFFFF; }
+
+        .price-tag { position: absolute; bottom: 10px; right: 10px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border-radius: 20px; padding: 6px 10px; display: flex; align-items: center; gap: 4px; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08); z-index: 2; }
+        .price-tag span { font-size: 13px; font-weight: 800; color: var(--text-primary); }
+
+        .info-section { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding: 0 4px 4px 4px; flex-grow: 1; }
+        .text-content { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; min-width: 0; }
+        .title { font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .description { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+        .avatar-gradient-ring { background: linear-gradient(135deg, #ff8da1 0%, #fde047 50%, #60a5fa 100%); }
+        .dropdown-menu { opacity: 0; visibility: hidden; transform: translateY(10px) scale(0.96); transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); transform-origin: top right; box-shadow: 0px 0px 2px rgba(0, 0, 0, 0.05), 0px 4px 12px rgba(0, 0, 0, 0.04), 0px 12px 24px rgba(0, 0, 0, 0.06), 0px 24px 48px -8px rgba(0, 0, 0, 0.15); }
+        .avatar-container:hover .dropdown-menu { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+        .dropdown-menu.show-dropdown { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+        @media (max-width: 767px) {
+            .avatar-container:hover .dropdown-menu { opacity: 0; visibility: hidden; transform: translateY(10px) scale(0.96); }
+        }
+        .pro-badge { background-color: #fecdf2; color: #111827; }
+        .menu-item:hover .menu-icon { color: #111827; }
+
+        @media (max-width: 600px) { .cards-container { grid-template-columns: 1fr; } }
+        body { background-color: #F3F4F9; color: #1F2937; -webkit-font-smoothing: antialiased; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 6px; }
+        ::-webkit-scrollbar-thumb:hover { background: #D1D5DB; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .product-modal-open { overflow: hidden; }
+        #product-modal-content::-webkit-scrollbar { display: none; }
+
+        .product-fav-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: #F3F4F9;
+            border: 1px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .product-fav-btn:hover {
+            background: #FEE2E2;
+            border-color: #FECACA;
+        }
+        .product-fav-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: none;
+            stroke: #EF4444;
+            stroke-width: 2;
+            transition: fill 0.2s ease, stroke 0.2s ease;
+        }
+        .product-fav-btn.active svg {
+            fill: #EF4444;
+            stroke: #EF4444;
+        }
+        .product-fav-btn.active {
+            background: #FEE2E2;
+            border-color: #FECACA;
+        }
+
+        /* Product Full-Screen View Styles */
+        .product-view-container {
+            width: 100%;
+            max-width: 100%;
+            padding: 0;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .hero-section {
+            position: relative;
+            height: 340px;
+            background-size: cover;
+            background-position: center;
+        }
+        .hero-fade {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 160px;
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0) 15%, rgba(255, 255, 255, 1) 100%);
+            z-index: 1;
+        }
+        .btn-back-mobile {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            border: none;
+            z-index: 30;
+        }
+        .btn-back-mobile:hover {
+            background: #ffffff;
+            transform: scale(1.05);
+        }
+        .btn-back {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            border: none;
+            z-index: 10;
+        }
+        .btn-back:hover {
+            background: #ffffff;
+            transform: scale(1.05);
+        }
+        .content-area-wrapper {
+            position: relative;
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            padding-bottom: 40px;
+        }
+        .content-area {
+            position: relative;
+            background: #ffffff;
+            border-radius: 30px;
+            padding: 32px 24px;
+            max-width: 800px;
+            width: calc(100% - 40px);
+            margin: -80px auto 0px auto;
+            z-index: 2;
+        }
+        .content-area::before {
+            content: "";
+            position: absolute;
+            inset: -1px;
+            border-radius: 30px;
+            background: linear-gradient(to bottom, #e5e7eb, transparent);
+            z-index: -1;
+        }
+        .pv-header {
+            margin-bottom: 24px;
+            padding-bottom: 24px;
+            border-bottom: 1.5px solid #e5e7eb;
+        }
+        .pv-header.schedule-header {
+            margin-bottom: 32px;
+        }
+        .pv-title {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin: 0 0 16px 0;
+            color: #111827;
+            line-height: 1.3;
+            width: 100%;
+        }
+        .pv-description {
+            font-size: 15px;
+            color: #6b7280;
+            font-weight: 400;
+            line-height: 1.6;
+            cursor: pointer;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .pv-description.expanded {
+            -webkit-line-clamp: unset;
+        }
+        .pv-price-action {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        .pv-price {
+            font-size: 22px;
+            font-weight: 600;
+            color: #6b7280;
+        }
+        .pv-btn-add-cart {
+            background-color: #3b82f6;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+            white-space: nowrap;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pv-btn-add-cart:hover {
+            background-color: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }
+        .pv-btn-add-cart.in-cart {
+            background-color: #111827;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+        }
+        .pv-btn-add-cart.in-cart:hover {
+            background-color: #1f2937;
+        }
+        .pv-section-title {
+            font-size: 17px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #111827;
+        }
+        .pv-progress-section {
+            margin-bottom: 30px;
+            padding-bottom: 32px;
+            border-bottom: 1.5px solid #e5e7eb;
+        }
+        .pv-progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 12px;
+        }
+        .pv-progress-track {
+            height: 12px;
+            background: #e5e7eb;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .pv-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: #3fa9f5;
+            border-radius: 999px;
+            transition: width 0.5s ease;
+        }
+        .pv-progress-fill.loading {
+            background: linear-gradient(90deg, #e5e7eb 25%, #d1d5db 50%, #e5e7eb 75%);
+            background-size: 200% 100%;
+            animation: pv-loading-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pv-loading-pulse {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .pv-timeline-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 80px;
+        }
+        .pv-spinner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #3fa9f5;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .pv-spinner svg {
+            animation: pv-spin 1s linear infinite;
+        }
+        @keyframes pv-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .pv-timeline-error {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 80px;
+            color: #ef4444;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .pv-loading-text {
+            animation: pv-text-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pv-text-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .pv-timeline {
+            display: flex;
+            flex-direction: column;
+            padding: 10px 10px 10px 0;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 15px;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .pv-timeline::-webkit-scrollbar {
+            display: none;
+        }
+        .pv-timeline-item {
+            display: flex;
+            min-height: 72px;
+        }
+        .pv-node {
+            width: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            flex-shrink: 0;
+            margin-right: 20px;
+        }
+        .pv-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid #d1d5db;
+            z-index: 2;
+            margin-top: 2px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .pv-timeline-item.completed .pv-marker {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+        .pv-timeline-item.completed .pv-marker::after {
+            content: '';
+            width: 5px;
+            height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            margin-bottom: 2px;
+        }
+        .pv-timeline-item.scheduled .pv-marker {
+            border-color: #e5e7eb;
+            background: #f9fafb;
+        }
+        .pv-line {
+            position: absolute;
+            top: 26px;
+            bottom: -4px;
+            width: 2px;
+            background: #e5e7eb;
+            z-index: 1;
+        }
+        .pv-timeline-item.completed .pv-line {
+            background: #3b82f6;
+        }
+        .pv-timeline-item.ongoing .pv-marker {
+            background: #10B981;
+            border-color: #10B981;
+        }
+        .pv-timeline-item.ongoing .pv-marker::after {
+            content: '';
+            width: 5px; height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            margin-bottom: 2px;
+        }
+        .pv-timeline-item.ongoing .pv-line {
+            background: #3b82f6;
+        }
+        .pv-line.dashed {
+            background: transparent !important;
+            border-left: 2px dashed #3b82f6 !important;
+            width: 0;
+        }
+        .pv-timeline-item:last-child .pv-line {
+            display: none;
+        }
+        .pv-timeline-content {
+            flex-grow: 1;
+            padding-top: 1px;
+            padding-bottom: 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .pv-text-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .pv-timeline-title {
+            font-size: 15px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+        .pv-timeline-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            font-weight: 400;
+        }
+        .pv-timeline-item.scheduled .pv-timeline-title {
+            color: #4b5563;
+        }
+        .pv-btn-go-course {
+            background-color: #10B981;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+            white-space: nowrap;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pv-btn-go-course:hover {
+            background-color: #059669;
+            transform: translateY(-2px);
+        }
+
+        .pv-btn-join-live {
+            background-color: #10B981;
+            color: #ffffff;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 50px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+            white-space: nowrap;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: pulse-live 2s infinite;
+        }
+        .pv-btn-join-live:hover {
+            background-color: #059669;
+            transform: translateY(-2px);
+        }
+        @keyframes pulse-live {
+            0% { box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 4px 20px rgba(16, 185, 129, 0.6); }
+            100% { box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+        }
+
+        .pv-fab {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            z-index: 40;
+            border: none;
+            border-radius: 50px;
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #ffffff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .pv-fab-join {
+            background-color: #10B981;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+            animation: pulse-fab 2s infinite;
+        }
+        .pv-fab-join:hover {
+            background-color: #059669;
+            transform: translateY(-2px);
+        }
+        .pv-fab-go {
+            background-color: #10B981;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+        }
+        .pv-fab-go:hover {
+            background-color: #059669;
+            transform: translateY(-2px);
+        }
+        @keyframes pulse-fab {
+            0% { box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 6px 24px rgba(16, 185, 129, 0.6); }
+            100% { box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3); }
+        }
+
+        /* Desktop popup adjustments */
+        @media (min-width: 768px) {
+            .hero-section {
+                height: 280px;
+            }
+            .content-area {
+                padding: 24px;
+                margin-top: -60px;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen flex font-sans overflow-hidden max-w-[1600px] mx-auto relative">
+
+    <aside class="w-[260px] flex flex-col px-6 py-8 shrink-0 h-screen hidden md:flex">
+        <div class="bg-white rounded-[1.75rem] p-4 shadow-card flex flex-col h-full overflow-y-auto">
+            <div class="flex items-center gap-2.5 mb-10 pl-2 shrink-0">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M19 12C19 15.866 15.866 19 12 19C8.13401 19 5 15.866 5 12C5 8.13401 8.13401 5 12 5C14.8692 5 17.34 6.723 18.397 9" stroke="#111827" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+                <span class="text-xl font-bold text-gray-900 tracking-tight">DealDeck</span>
+            </div>
+
+            <nav class="flex-1 flex flex-col gap-1 shrink-0 mt-2 relative" id="sidebar-nav">
+                <div id="nav-indicator" class="absolute left-0 w-full bg-brand rounded-2xl transition-all duration-300 ease-out z-0 pointer-events-none opacity-0"></div>
+
+                <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-4 mt-2 relative z-10">Menu</p>
+                <a href="/courses" class="nav-item flex items-center gap-3.5 px-4 py-3 rounded-2xl text-white font-semibold text-[14px] relative z-10 active" onclick="navigateTo(event, 'courses')">
+                    <i class="ph ph-graduation-cap text-xl"></i> Courses
+                </a>
+                <a href="/indicators" class="nav-item flex items-center gap-3.5 px-4 py-3 rounded-2xl text-gray-500 font-semibold hover:bg-gray-50 hover:text-gray-900 transition-colors text-[14px] relative z-10" onclick="navigateTo(event, 'indicators')">
+                    <i class="ph ph-chart-line-up text-xl"></i> Indicators
+                </a>
+                <a href="/alerts" class="nav-item flex items-center gap-3.5 px-4 py-3 rounded-2xl text-gray-500 font-semibold hover:bg-gray-50 hover:text-gray-900 transition-colors text-[14px] relative z-10" onclick="navigateTo(event, 'alerts')">
+                    <i class="ph ph-bell-ringing text-xl"></i> Alerts
+                </a>
+
+                <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 pl-4 mt-6 relative z-10">Preferences</p>
+                <a href="/settings" class="nav-item flex items-center gap-3.5 px-4 py-3 rounded-2xl text-gray-500 font-semibold hover:bg-gray-50 hover:text-gray-900 transition-colors text-[14px] relative z-10" onclick="navigateTo(event, 'settings')">
+                    <i class="ph ph-gear text-xl"></i> Settings
+                </a>
+            </nav>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col py-8 px-6 md:pl-0 pr-6 gap-6 h-screen min-w-0">
+        
+        <header class="flex items-center gap-3 shrink-0 xl:pr-2 h-[48px]">
+            <!-- Left: Title -->
+            <div id="header-text" class="flex-1 min-w-0 opacity-100 transition-all duration-300 ease-out overflow-hidden flex items-center gap-2">
+                <i id="page-icon" class="ph ph-graduation-cap text-[20px] text-gray-700"></i>
+                <h1 id="page-title" class="text-[20px] font-bold text-gray-900 leading-tight truncate">Courses</h1>
+            </div>
+
+            <!-- Middle: Search input -->
+            <div id="search-bar" class="flex items-center w-0 min-w-0 opacity-0 overflow-hidden pointer-events-none transition-all duration-300 ease-out">
+                <div class="flex-1 relative min-w-0">
+                    <i class="ph ph-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg pointer-events-none"></i>
+                    <input id="search-input" type="text" placeholder="Search courses, indicators, bots..."
+                        class="w-full h-11 pl-11 pr-10 bg-white rounded-2xl shadow-card text-sm font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        oninput="debouncedSearch(this.value)">
+                    <button onclick="clearSearch()" class="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700 flex items-center justify-center transition-colors">
+                        <i class="ph ph-x text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right: Icon group (always visible) -->
+            <div class="flex items-center gap-3 shrink-0">
+                <button id="search-toggle-btn" onclick="toggleSearch()" class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-card text-gray-500 hover:text-brand transition-colors shrink-0">
+                    <i class="ph ph-magnifying-glass text-[18px]"></i>
+                </button>
+
+                <button onclick="openModal()" class="flex xl:hidden w-10 h-10 rounded-full bg-white items-center justify-center shadow-card text-gray-500 hover:text-brand transition-colors relative" aria-label="Open Cart">
+                    <i class="ph ph-shopping-cart text-[18px]"></i>
+                    <span id="header-cart-badge" class="absolute top-0 right-0 translate-x-[20%] translate-y-[-20%] w-4 h-4 bg-brand text-white text-[9px] font-bold flex items-center justify-center rounded-full border border-white hidden shadow-sm">0</span>
+                </button>
+
+                <button class="hidden sm:flex w-10 h-10 rounded-full bg-white items-center justify-center shadow-card text-gray-500 hover:text-brand transition-colors relative">
+                    <i class="ph ph-bell text-[18px]"></i>
+                    <span class="absolute top-[10px] right-[10px] w-[7px] h-[7px] bg-danger-text rounded-full border border-white"></span>
+                </button>
+
+                <div class="relative avatar-container z-50" id="avatar-container">
+                    <button id="avatar-btn" onclick="toggleAvatarDropdown(event)" class="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-card text-gray-500 hover:text-brand transition-colors shrink-0">
+                        <i id="avatar-icon" class="ph ph-user-plus text-[18px]"></i>
+                    </button>
+
+                    <div class="dropdown-menu absolute right-0 top-[calc(100%+8px)] w-[200px] sm:w-[230px] bg-white rounded-[20px] p-2 border border-gray-100/80 flex flex-col">
+                        <div class="p-2.5 sm:p-3 border-b border-gray-100 bg-gray-50/50 mb-1 rounded-t-xl">
+                            <p class="text-xs sm:text-sm font-bold text-gray-900" id="auth-display-name">Guest Account</p>
+                            <p class="text-[11px] sm:text-xs font-medium text-gray-500 mt-0.5" id="auth-display-role">Not logged in</p>
+                        </div>
+                        
+                        <a href="/settings/account" onclick="navigateTo(event, 'settings/account')" class="menu-item flex items-center gap-3 sm:gap-3.5 px-3 py-2 sm:py-2.5 rounded-xl text-gray-700 hover:bg-[#f3f4f6] hover:text-gray-900 transition-colors group mt-0.5">
+                            <i data-lucide="user" class="menu-icon w-[16px] h-[16px] sm:w-[18px] sm:h-[18px] text-gray-500 transition-colors"></i>
+                            <span class="font-medium text-[13px] sm:text-[15px]">Profile</span>
+                        </a>
+
+                        <a href="/settings" onclick="navigateTo(event, 'settings')" class="menu-item flex items-center gap-3 sm:gap-3.5 px-3 py-2 sm:py-2.5 rounded-xl text-gray-700 hover:bg-[#f3f4f6] hover:text-gray-900 transition-colors group mt-0.5">
+                            <i data-lucide="settings" class="menu-icon w-[16px] h-[16px] sm:w-[18px] sm:h-[18px] text-gray-500 transition-colors"></i>
+                            <span class="font-medium text-[13px] sm:text-[15px]">Settings</span>
+                        </a>
+
+                        <a href="#" class="menu-item flex items-center gap-3 sm:gap-3.5 px-3 py-2 sm:py-2.5 rounded-xl text-gray-700 hover:bg-[#f3f4f6] hover:text-gray-900 transition-colors group mt-0.5" onclick="showToast('Support page coming soon!', 'error', 3000); return false;">
+                            <i data-lucide="help-circle" class="menu-icon w-[16px] h-[16px] sm:w-[18px] sm:h-[18px] text-gray-500 transition-colors"></i>
+                            <span class="font-medium text-[13px] sm:text-[15px]">Support</span>
+                        </a>
+
+                        <div class="h-[1px] bg-gray-100 my-1.5 mx-2"></div>
+
+                        <button id="btn-signout" onclick="logout()" class="w-full text-left menu-item flex items-center gap-3 sm:gap-3.5 px-3 py-2 sm:py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-colors group hidden">
+                            <i data-lucide="log-out" class="menu-icon w-[16px] h-[16px] sm:w-[18px] sm:h-[18px] text-red-500 transition-colors"></i>
+                            <span class="font-medium text-[13px] sm:text-[15px]">Sign out</span>
+                        </button>
+
+                        <button id="btn-signin" onclick="goToLogin()" class="w-full text-left menu-item flex items-center gap-3 sm:gap-3.5 px-3 py-2 sm:py-2.5 rounded-xl text-brand hover:bg-brand/10 transition-colors group hidden">
+                            <i data-lucide="log-in" class="menu-icon w-[16px] h-[16px] sm:w-[18px] sm:h-[18px] text-brand transition-colors"></i>
+                            <span class="font-medium text-[13px] sm:text-[15px]">Sign in</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </header>
+
+        <div id="scrollable-grid" class="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-6 flex-1 min-h-0 overflow-y-auto pb-20 md:pb-8 xl:pr-2">
+            
+            <div class="flex flex-col gap-6">
+                <div id="skeleton-container" class="cards-container pointer-events-none">
+                    <div class="nft-card"><div class="image-container bg-gray-200 animate-pulse"></div><div class="info-section"><div class="text-content w-full pr-4"><div class="h-4 bg-gray-200 rounded w-2/3 animate-pulse mb-1"></div><div class="h-3 bg-gray-200 rounded w-full animate-pulse mb-1"></div><div class="h-3 bg-gray-200 rounded w-1/2 animate-pulse"></div></div><div class="w-8 h-8 rounded-full bg-gray-200 animate-pulse shrink-0"></div></div></div>
+                    <div class="nft-card"><div class="image-container bg-gray-200 animate-pulse"></div><div class="info-section"><div class="text-content w-full pr-4"><div class="h-4 bg-gray-200 rounded w-2/3 animate-pulse mb-1"></div><div class="h-3 bg-gray-200 rounded w-full animate-pulse mb-1"></div><div class="h-3 bg-gray-200 rounded w-1/2 animate-pulse"></div></div><div class="w-8 h-8 rounded-full bg-gray-200 animate-pulse shrink-0"></div></div></div>
+                </div>
+
+                <div id="actual-cards-container" class="cards-container hidden"></div>
+            </div>
+            
+            <div class="hidden xl:flex sticky top-0 flex-col gap-6 self-start w-full">
+                <div class="cart-widget-container bg-white rounded-[1.75rem] p-6 shadow-card flex flex-col shrink-0 h-[480px]">
+                    <div class="flex gap-6 border-b border-gray-100 mb-4 relative z-10">
+                        <button class="tab-cart text-[15px] font-bold text-gray-400 pb-3 border-b-2 border-transparent transition-colors focus:outline-none" onclick="switchSlide('cart', this)">
+                            Cart (0)
+                        </button>
+                        <button class="tab-library text-[15px] font-bold text-gray-900 pb-3 border-b-2 border-brand transition-colors focus:outline-none" onclick="switchSlide('library', this)">
+                            Library
+                        </button>
+                        
+                    </div>
+
+                    <div class="flex-1 overflow-hidden relative w-full">
+                        <div class="slider-track flex w-[200%] h-full transition-transform duration-500 ease-in-out" style="transform: translateX(-50%)">
+                            <div class="w-1/2 h-full flex flex-col overflow-hidden pr-2 pb-2">
+                                <!-- Library Tabs -->
+                                <div class="flex gap-3 border-b border-gray-100 mb-3 pb-1 shrink-0">
+                                    <button class="lib-tab-courses text-xs font-bold text-brand pb-1 border-b-2 border-brand transition-colors" onclick="switchLibTab('courses', this)">Courses</button>
+                                    <button class="lib-tab-indicators text-xs font-bold text-gray-400 pb-1 border-b-2 border-transparent transition-colors" onclick="switchLibTab('indicators', this)">Indicators</button>
+                                    <button class="lib-tab-bots text-xs font-bold text-gray-400 pb-1 border-b-2 border-transparent transition-colors" onclick="switchLibTab('bots', this)">Alert Bots</button>
+                                </div>
+                                <div class="lib-content flex-1 overflow-y-auto no-scrollbar flex flex-col gap-2">
+                                    <p class="text-sm text-gray-400 mt-4 text-center lib-empty-msg">Library items will appear here.</p>
+                                </div>
+                            </div>
+
+                            <div class="w-1/2 h-full flex flex-col justify-between pr-2">
+                                <div class="cart-items-container flex flex-col gap-3 overflow-y-auto no-scrollbar pb-2"></div>
+                                
+                                <div class="pt-5 mt-auto border-t border-gray-100 shrink-0">
+                                    <div class="flex justify-between items-center mb-4 px-1">
+                                        <span class="text-[14px] text-gray-500 font-medium">Total Amount</span>
+                                        <span class="cart-total text-[18px] font-extrabold text-gray-900">$0.00</span>
+                                    </div>
+                                    <button class="checkout-btn w-full bg-brand text-white font-bold py-3.5 rounded-xl shadow-brand-glow hover:bg-brand-dark transition-all text-[15px] flex items-center justify-center gap-2" onclick="processCheckout(this)">
+                                        <i class="ph ph-credit-card text-lg"></i> Checkout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Product Detail Full-Screen View (mobile) / Popup (desktop) -->
+    <div id="product-modal-overlay" class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center opacity-0 transition-opacity duration-300" onclick="closeProductPageOnOverlay(event)">
+        <div id="product-modal-content" class="bg-white w-full h-full md:w-[800px] md:max-h-[90vh] md:rounded-[30px] md:overflow-hidden flex flex-col relative transform scale-95 transition-transform duration-300" onclick="event.stopPropagation()">
+            <!-- Desktop close button -->
+            <button onclick="closeProductPage()" class="hidden md:flex absolute top-4 right-4 z-30 w-10 h-10 rounded-full bg-gray-100 items-center justify-center text-gray-500 hover:bg-gray-200 hover:text-gray-700 transition-colors shrink-0">
+                <i class="ph ph-x text-lg"></i>
+            </button>
+
+            <!-- Fixed mobile back button (outside scroll area) -->
+            <button onclick="closeProductPage()" class="btn-back-mobile md:hidden" aria-label="Go back">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+            </button>
+
+            <!-- Scrollable Content Area -->
+            <div class="flex-1 overflow-y-auto relative" id="product-scroll-area">
+                <!-- Hero Section -->
+                <div class="hero-section relative h-[340px] bg-cover bg-center">
+                    <div class="hero-fade"></div>
+                </div>
+
+                <!-- Content Area -->
+                <div class="content-area-wrapper">
+                    <div class="content-area" id="product-view-content" style="margin-top: -80px;">
+                        <!-- Dynamic content injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- FAB Join/Go Course Button -->
+            <button id="product-fab" class="pv-fab hidden" onclick="handleFabClick()"></button>
+        </div>
+    </div>
+
+    <div id="cart-modal-overlay" class="xl:hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center opacity-0 transition-opacity duration-300" onclick="closeModalOnOverlay(event)">
+        <div id="cart-modal-content" class="cart-widget-container bg-white rounded-[1.75rem] p-6 shadow-modal flex flex-col w-full max-w-md h-[550px] mx-4 transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4 relative z-10">
+                <div class="flex gap-6 border-b border-gray-100 flex-1">
+                    <button class="tab-library text-[15px] font-bold text-gray-900 pb-3 border-b-2 border-brand transition-colors focus:outline-none" onclick="switchSlide('library', this)">
+                        Library
+                    </button>
+                    <button class="tab-cart text-[15px] font-bold text-gray-400 pb-3 border-b-2 border-transparent transition-colors focus:outline-none" onclick="switchSlide('cart', this)">
+                        Cart (0)
+                    </button>
+                </div>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors ml-4 mb-2 shadow-sm">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-hidden relative w-full">
+                <div class="slider-track flex w-[200%] h-full transition-transform duration-500 ease-in-out" style="transform: translateX(-50%)">
+                    <div class="w-1/2 h-full flex flex-col overflow-hidden pr-2 pb-2">
+                        <!-- Library Tabs -->
+                        <div class="flex gap-3 border-b border-gray-100 mb-3 pb-1 shrink-0">
+                            <button class="lib-tab-courses text-xs font-bold text-brand pb-1 border-b-2 border-brand transition-colors" onclick="switchLibTab('courses', this)">Courses</button>
+                            <button class="lib-tab-indicators text-xs font-bold text-gray-400 pb-1 border-b-2 border-transparent transition-colors" onclick="switchLibTab('indicators', this)">Indicators</button>
+                            <button class="lib-tab-bots text-xs font-bold text-gray-400 pb-1 border-b-2 border-transparent transition-colors" onclick="switchLibTab('bots', this)">Alert Bots</button>
+                        </div>
+                        <div class="lib-content flex-1 overflow-y-auto no-scrollbar flex flex-col gap-2">
+                            <p class="text-sm text-gray-400 mt-4 text-center lib-empty-msg">Library items will appear here.</p>
+                        </div>
+                    </div>
+
+                    <div class="w-1/2 h-full flex flex-col justify-between pr-2">
+                        <div class="cart-items-container flex flex-col gap-3 overflow-y-auto no-scrollbar pb-2"></div>
+                        <div class="pt-5 mt-auto border-t border-gray-100 shrink-0">
+                            <div class="flex justify-between items-center mb-4 px-1">
+                                <span class="text-[14px] text-gray-500 font-medium">Total Amount</span>
+                                <span class="cart-total text-[18px] font-extrabold text-gray-900">$0.00</span>
+                            </div>
+                            <button class="checkout-btn w-full bg-brand text-white font-bold py-3.5 rounded-xl shadow-brand-glow hover:bg-brand-dark transition-all text-[15px] flex items-center justify-center gap-2" onclick="processCheckout(this)">
+                                <i class="ph ph-credit-card text-lg"></i> Checkout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // Load cart from Local Storage to persist it across logins/refreshes
+        let cartState = JSON.parse(localStorage.getItem('dealdeck_cart')) || [];
+        let purchasedCourseIds = [];
+        let purchasedIndicatorIds = [];
+        let purchasedBotIds = [];
+
+        // Pagination state
+        let courseSkip = 0;
+        const courseLimit = 8;
+        let indicatorSkip = 0;
+        const indicatorLimit = 8;
+        let isLoading = false;
+        let hasMoreCourses = true;
+        let hasMoreIndicators = true;
+        let botSkip = 0;
+        const botLimit = 8;
+        let hasMoreBots = true;
+
+        // Search state
+        let searchMode = false;
+        let searchDebounceTimer = null;
+        let lastSearchQuery = '';
+
+        // Parse ISO date string as local time (not UTC)
+        function parseLocalDate(dateStr) {
+            if (!dateStr) return new Date();
+            return new Date(dateStr.replace('T', ' '));
+        }
+
+        function saveCart() {
+            localStorage.setItem('dealdeck_cart', JSON.stringify(cartState));
+        }
+
+        // --- PRODUCT PAGE LOGIC ---
+        let currentProduct = null;
+        let enrollmentStatus = null;
+
+        function updateFabButton(status) {
+            const fab = document.getElementById('product-fab');
+            if (!fab) return;
+            const schedule = status && status.schedule;
+            const isOngoing = status && status.is_ongoing;
+            const startLink = status && status.start_link;
+            if (isOngoing && schedule && schedule.join_link) {
+                fab.className = 'pv-fab pv-fab-join';
+                fab.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    Join Live`;
+                fab.dataset.link = schedule.join_link;
+                fab.classList.remove('hidden');
+            } else if (startLink) {
+                fab.className = 'pv-fab pv-fab-join';
+                fab.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    Start Bot`;
+                fab.dataset.link = startLink;
+                fab.classList.remove('hidden');
+            } else {
+                fab.classList.add('hidden');
+            }
+        }
+
+        function handleFabClick() {
+            const fab = document.getElementById('product-fab');
+            if (fab && fab.dataset.link) {
+                window.open(fab.dataset.link, '_blank');
+            }
+        }
+
+        async function openProductPage(product) {
+            currentProduct = product;
+            const overlay = document.getElementById('product-modal-overlay');
+            const contentEl = document.getElementById('product-view-content');
+            const heroSection = overlay.querySelector('.hero-section');
+
+            heroSection.style.backgroundImage = `url('${product.image || 'https://via.placeholder.com/1600x400?text=No+Image'}')`;
+
+            const isInCart = cartState.some(item => item.id == product.id && item.product_section == product.productSection);
+            const isPurchased = product.isPurchased;
+
+            // Update URL with product UUID
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('product', product.id);
+            const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+            history.pushState({ ...history.state, productId: product.id }, '', newUrl);
+
+            // Open popup immediately
+            let html = '';
+            if (product.type === 'Course' && isPurchased) {
+                html = buildLoadingView(product);
+            } else if (product.type === 'Course') {
+                html = buildPurchaseView(product, isInCart);
+            } else if (product.type === 'Indicator') {
+                html = buildIndicatorView(product, isInCart, isPurchased);
+            } else if (product.type === 'Bot') {
+                html = buildBotView(product, isInCart, isPurchased);
+            }
+
+            contentEl.innerHTML = html;
+
+            // Hide FAB initially until enrollment status loads
+            updateFabButton(null);
+
+            // For purchased bots, show the FAB immediately
+            if (product.type === 'Bot' && isPurchased) {
+                const botTgId = product.telegramId || '';
+                const apiKey = product.apiKey || '';
+                const startLink = botTgId ? `https://t.me/${botTgId}?start=${apiKey}` : '';
+                if (startLink) {
+                    updateFabButton({ start_link: startLink });
+                }
+            }
+
+            // Description expand/collapse
+            const desc = contentEl.querySelector('.pv-description');
+            if (desc) {
+                desc.addEventListener('click', () => desc.classList.toggle('expanded'));
+            }
+
+            overlay.classList.remove('hidden');
+            document.body.classList.add('product-modal-open');
+            void overlay.offsetWidth;
+            overlay.classList.remove('opacity-0');
+            overlay.classList.add('opacity-100');
+            const content = document.getElementById('product-modal-content');
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+
+            // Fetch enrollment status in background for purchased courses
+            if (product.type === 'Course' && isPurchased) {
+                // Force browser to paint the spinner before fetching
+                await new Promise(r => requestAnimationFrame(r));
+
+                enrollmentStatus = null;
+                try {
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        const res = await fetch(`/api/enrollment-status/${product.id}`, {
+                            headers: { 'Authorization': 'Bearer ' + token }
+                        });
+                        if (res.ok) {
+                            enrollmentStatus = await res.json();
+                        } else {
+                            throw new Error('Failed to fetch');
+                        }
+                    } else {
+                        throw new Error('No token');
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch enrollment status:", e);
+                    const timelineContainer = document.getElementById('pv-timeline-container');
+                    if (timelineContainer) {
+                        timelineContainer.className = 'pv-timeline pv-timeline-error';
+                        timelineContainer.innerHTML = `
+                            <div>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                Failed to load timeline
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+                // Re-render timeline with actual data
+                const timelineHtml = buildTimelineOnly(product);
+                const timelineContainer = document.getElementById('pv-timeline-container');
+                if (timelineContainer) {
+                    timelineContainer.outerHTML = timelineHtml;
+                }
+                // Update progress bar
+                const progressPct = (enrollmentStatus && enrollmentStatus.progress !== undefined) ? enrollmentStatus.progress : 0;
+                const progressSection = contentEl.querySelector('.pv-progress-section');
+                if (progressSection) {
+                    progressSection.outerHTML = `
+                        <div class="pv-progress-section">
+                            <div class="pv-progress-header">
+                                <span>Progress</span>
+                                <span>${progressPct}%</span>
+                            </div>
+                            <div class="pv-progress-track">
+                                <div class="pv-progress-fill" style="width: ${progressPct}%"></div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Update FAB button (Join Live / Go to Course)
+                updateFabButton(enrollmentStatus);
+            }
+        }
+
+        function buildPurchaseView(product, isInCart) {
+            const cartBtnText = isInCart ? 'Remove from Cart' : 'Add to Cart';
+            const cartBtnClass = isInCart ? 'pv-btn-add-cart in-cart' : 'pv-btn-add-cart';
+            const cartIcon = isInCart
+                ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+                : `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
+
+            return `
+                <div class="pv-header">
+                    <h1 class="pv-title">${product.title}</h1>
+                    <p class="pv-description" title="Click to read more">${product.description || 'No description provided.'}</p>
+                </div>
+
+                <div class="pv-price-action">
+                    <span class="pv-price">$${product.price.toFixed(2)}</span>
+                    <button class="${cartBtnClass}" onclick="toggleCartFromProductPage(this)">
+                        ${cartIcon}
+                        ${cartBtnText}
+                    </button>
+                </div>
+
+                <h2 class="pv-section-title">Enrollment Status</h2>
+
+                <div class="pv-timeline">
+                    <div class="pv-timeline-item scheduled">
+                        <div class="pv-node">
+                            <div class="pv-marker"></div>
+                            <div class="pv-line"></div>
+                        </div>
+                        <div class="pv-timeline-content">
+                            <div class="pv-text-group">
+                                <div class="pv-timeline-title">Not Purchased</div>
+                                <div class="pv-timeline-subtitle">Add to cart to get started</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function buildLoadingView(product) {
+            return `
+                <div class="pv-header schedule-header">
+                    <h1 class="pv-title">${product.title}</h1>
+                    <p class="pv-description" title="Click to read more">${product.description || 'No description provided.'}</p>
+                </div>
+
+                <div class="pv-progress-section">
+                    <div class="pv-progress-header">
+                        <span>Progress</span>
+                        <span>0%</span>
+                    </div>
+                    <div class="pv-progress-track">
+                        <div class="pv-progress-fill loading" style="width: 30%"></div>
+                    </div>
+                </div>
+
+                <h2 class="pv-section-title">Timeline</h2>
+
+                <div class="pv-timeline pv-timeline-loading" id="pv-timeline-container">
+                    <div class="pv-spinner">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3fa9f5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                        <span>Loading timeline...</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCourseTimeline() {
+            const chapters = (enrollmentStatus && enrollmentStatus.chapters && enrollmentStatus.chapters.length > 0)
+                ? enrollmentStatus.chapters
+                : [];
+            const nextIdx = enrollmentStatus ? enrollmentStatus.next_chapter_index : null;
+            const isBatchAssigned = enrollmentStatus && enrollmentStatus.batch_assigned;
+            const hasAnySchedule = chapters.some(ch => ch.scheduled_at);
+
+            let timelineHtml = '';
+
+            // Purchased step — always ticked
+            timelineHtml += `
+                <div class="pv-timeline-item completed">
+                    <div class="pv-node">
+                        <div class="pv-marker"></div>
+                        <div class="pv-line ${isBatchAssigned ? '' : 'dashed'}"></div>
+                    </div>
+                    <div class="pv-timeline-content">
+                        <div class="pv-text-group">
+                            <div class="pv-timeline-title">Purchased</div>
+                            <div class="pv-timeline-subtitle">Payment confirmed</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Batch Assigned step
+            const isFirstActive = chapters.length > 0 && (
+                chapters[0].is_past === true ||
+                chapters[0].is_ongoing === true ||
+                (nextIdx !== null && chapters[0].chapter_index < nextIdx)
+            );
+            timelineHtml += `
+                <div class="pv-timeline-item ${isBatchAssigned ? 'completed' : 'scheduled'}">
+                    <div class="pv-node">
+                        <div class="pv-marker"></div>
+                        <div class="pv-line ${hasAnySchedule && isFirstActive ? '' : 'dashed'}"></div>
+                    </div>
+                    <div class="pv-timeline-content">
+                        <div class="pv-text-group">
+                            <div class="pv-timeline-title">Batch Assigned</div>
+                            <div class="pv-timeline-subtitle">${isBatchAssigned ? 'Batch assigned successfully' : 'Pending assignment'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (hasAnySchedule) {
+                chapters.forEach((ch, idx) => {
+                    const isLastChapter = idx === chapters.length - 1;
+                    const truncatedTitle = ch.title.length > 35 ? ch.title.substring(0, 35) + '...' : ch.title;
+
+                    const chScheduledAt = ch.scheduled_at ? parseLocalDate(ch.scheduled_at) : null;
+                    const isOngoing = ch.is_ongoing === true;
+                    const isCompleted = ch.is_past === true || (nextIdx !== null && ch.chapter_index < nextIdx);
+                    const isActive = isCompleted || isOngoing;
+
+                    let dateStr = 'Not scheduled';
+                    if (chScheduledAt && !isNaN(chScheduledAt)) {
+                        dateStr = chScheduledAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' • ' + chScheduledAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    }
+
+                    let stateClass = 'scheduled';
+                    if (isOngoing) stateClass = 'ongoing';
+                    else if (isCompleted) stateClass = 'completed';
+
+                    let lineClass = '';
+                    if (!isLastChapter) {
+                        const nextCh = chapters[idx + 1];
+                        const isNextOngoing = nextCh.is_ongoing === true;
+                        const isNextCompleted = nextCh.is_past === true || (nextIdx !== null && nextCh.chapter_index < nextIdx);
+                        const isNextActive = isNextCompleted || isNextOngoing;
+                        if (isActive && !isNextActive) {
+                            lineClass = 'dashed';
+                        }
+                    }
+
+                    let subTitle = isOngoing ? 'Live Now!' : (isCompleted ? 'Completed' : dateStr);
+
+                    timelineHtml += `
+                        <div class="pv-timeline-item ${stateClass}">
+                            <div class="pv-node">
+                                <div class="pv-marker"></div>
+                                ${!isLastChapter ? `<div class="pv-line ${lineClass}"></div>` : ''}
+                            </div>
+                            <div class="pv-timeline-content">
+                                <div class="pv-text-group">
+                                    <div class="pv-timeline-title">Chapter ${ch.chapter_index}: ${truncatedTitle}</div>
+                                    <div class="pv-timeline-subtitle">${subTitle}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                timelineHtml += `
+                    <div class="pv-timeline-item scheduled">
+                        <div class="pv-node">
+                            <div class="pv-marker"></div>
+                        </div>
+                        <div class="pv-timeline-content">
+                            <div class="pv-text-group">
+                                <div class="pv-timeline-title">Course Scheduled</div>
+                                <div class="pv-timeline-subtitle">Awaiting schedule details</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return timelineHtml;
+        }
+
+        function buildTimelineOnly(product) {
+            return `
+                <div class="pv-timeline">
+                    ${renderCourseTimeline()}
+                </div>`;
+        }
+
+        function buildScheduleView(product) {
+            const progress = (enrollmentStatus && enrollmentStatus.progress !== undefined) ? enrollmentStatus.progress : 0;
+
+            return `
+                <div class="pv-header schedule-header">
+                    <h1 class="pv-title">${product.title}</h1>
+                    <p class="pv-description">${product.description || 'No description provided.'}</p>
+                </div>
+
+                <div class="pv-progress-section">
+                    <div class="pv-progress-header">
+                        <span>Progress</span>
+                        <span>${progress}%</span>
+                    </div>
+                    <div class="pv-progress-track">
+                        <div class="pv-progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                </div>
+
+                <h2 class="pv-section-title">Timeline</h2>
+
+                <div class="pv-timeline">
+                    ${renderCourseTimeline()}
+                </div>
+            `;
+        }
+
+        function buildIndicatorView(product, isInCart, isPurchased) {
+            if (isPurchased) {
+                const expiryDate = product.expiry ? new Date(product.expiry) : null;
+                const isExpired = expiryDate ? expiryDate < new Date() : false;
+                const expiryStr = expiryDate ? expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No expiry';
+                return `
+                    <div class="pv-header schedule-header">
+                        <h1 class="pv-title">${product.title}</h1>
+                        <p class="pv-description">${product.description || 'No description provided.'}</p>
+                    </div>
+                    <h2 class="pv-section-title">Enrollment Status</h2>
+                    <div class="pv-timeline">
+                        <div class="pv-timeline-item completed">
+                            <div class="pv-node">
+                                <div class="pv-marker"></div>
+                                <div class="pv-line ${isExpired ? '' : 'dashed'}"></div>
+                            </div>
+                            <div class="pv-timeline-content">
+                                <div class="pv-text-group">
+                                    <div class="pv-timeline-title">Purchased</div>
+                                    <div class="pv-timeline-subtitle">Access granted</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pv-timeline-item ${isExpired ? 'completed' : 'scheduled'}">
+                            <div class="pv-node">
+                                <div class="pv-marker"></div>
+                            </div>
+                            <div class="pv-timeline-content">
+                                <div class="pv-text-group">
+                                    <div class="pv-timeline-title">Expiry</div>
+                                    <div class="pv-timeline-subtitle">${expiryStr}${isExpired ? ' (Expired)' : ''}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const cartBtnText = isInCart ? 'Remove from Cart' : 'Add to Cart';
+            const cartBtnClass = isInCart ? 'pv-btn-add-cart in-cart' : 'pv-btn-add-cart';
+            const cartIcon = isInCart
+                ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+                : `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
+
+            return `
+                <div class="pv-header">
+                    <h1 class="pv-title">${product.title}</h1>
+                    <p class="pv-description" title="Click to read more">${product.description || 'No description provided.'}</p>
+                </div>
+
+                <div class="pv-price-action">
+                    <span class="pv-price">$${product.price.toFixed(2)}</span>
+                    <button class="${cartBtnClass}" onclick="toggleCartFromProductPage(this)">
+                        ${cartIcon}
+                        ${cartBtnText}
+                    </button>
+                </div>
+
+                <h2 class="pv-section-title">Enrollment Status</h2>
+
+                <div class="pv-timeline">
+                    <div class="pv-timeline-item scheduled">
+                        <div class="pv-node">
+                            <div class="pv-marker"></div>
+                            <div class="pv-line"></div>
+                        </div>
+                        <div class="pv-timeline-content">
+                            <div class="pv-text-group">
+                                <div class="pv-timeline-title">Not Purchased</div>
+                                <div class="pv-timeline-subtitle">Add to cart to get started</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function buildBotView(product, isInCart, isPurchased) {
+            if (isPurchased) {
+                const expiryDate = product.expiry ? new Date(product.expiry) : null;
+                const isExpired = expiryDate ? expiryDate < new Date() : false;
+                const expiryStr = expiryDate ? expiryDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No expiry';
+                const apiKey = product.apiKey || '';
+                const truncatedKey = apiKey ? apiKey.substring(0, 7) + '...' : 'No Key';
+                const isAssigned = !!product.userTelegramId;
+                
+                // Line between Purchased and Bot Assigned
+                const line1Class = isAssigned ? '' : 'dashed';
+                // Line between Bot Assigned and Expiry
+                const line2Class = isAssigned ? 'dashed' : '';
+                
+                return `
+                    <div class="pv-header schedule-header">
+                        <h1 class="pv-title">${product.title}</h1>
+                        <p class="pv-description">${product.description || 'No description provided.'}</p>
+                    </div>
+                    <h2 class="pv-section-title">Bot Details</h2>
+                    <div class="pv-timeline">
+                        <div class="pv-timeline-item completed">
+                            <div class="pv-node">
+                                <div class="pv-marker"></div>
+                                <div class="pv-line ${line1Class}"></div>
+                            </div>
+                            <div class="pv-timeline-content">
+                                <div class="pv-text-group">
+                                    <div class="pv-timeline-title">Purchased</div>
+                                    <div class="pv-timeline-subtitle">Access granted</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pv-timeline-item ${isAssigned ? 'completed' : 'scheduled'}">
+                            <div class="pv-node">
+                                <div class="pv-marker"></div>
+                                <div class="pv-line ${line2Class}"></div>
+                            </div>
+                            <div class="pv-timeline-content">
+                                <div class="pv-text-group">
+                                    <div class="pv-timeline-title">Bot Assigned</div>
+                                    <div class="pv-timeline-subtitle" style="display: flex; align-items: center; gap: 8px;">
+                                        ${isAssigned 
+                                            ? '<span style="color: #10B981; font-weight: 500;">Connected</span>' 
+                                            : `<span style="font-family: monospace; background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px;">${truncatedKey}</span>
+                                               <button onclick="copyApiKey(event, '${apiKey}')" style="background: none; border: none; cursor: pointer; padding: 2px; display: flex; align-items: center;" title="Copy full key">
+                                                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4C4AE3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                               </button>`
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="pv-timeline-item ${isExpired ? 'completed' : 'scheduled'}">
+                            <div class="pv-node">
+                                <div class="pv-marker"></div>
+                            </div>
+                            <div class="pv-timeline-content">
+                                <div class="pv-text-group">
+                                    <div class="pv-timeline-title">Expiry</div>
+                                    <div class="pv-timeline-subtitle">${expiryStr}${isExpired ? ' (Expired)' : ''}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const cartBtnText = isInCart ? 'Remove from Cart' : 'Add to Cart';
+            const cartBtnClass = isInCart ? 'pv-btn-add-cart in-cart' : 'pv-btn-add-cart';
+            const cartIcon = isInCart
+                ? `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`
+                : `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`;
+
+            return `
+                <div class="pv-header">
+                    <h1 class="pv-title">${product.title}</h1>
+                    <p class="pv-description" title="Click to read more">${product.description || 'No description provided.'}</p>
+                </div>
+
+                <div class="pv-price-action">
+                    <span class="pv-price">$${product.price.toFixed(2)}</span>
+                    <button class="${cartBtnClass}" onclick="toggleCartFromProductPage(this)">
+                        ${cartIcon}
+                        ${cartBtnText}
+                    </button>
+                </div>
+
+                <h2 class="pv-section-title">Enrollment Status</h2>
+
+                <div class="pv-timeline">
+                    <div class="pv-timeline-item scheduled">
+                        <div class="pv-node">
+                            <div class="pv-marker"></div>
+                            <div class="pv-line"></div>
+                        </div>
+                        <div class="pv-timeline-content">
+                            <div class="pv-text-group">
+                                <div class="pv-timeline-title">Not Purchased</div>
+                                <div class="pv-timeline-subtitle">Add to cart to get started</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function copyApiKey(event, key) {
+            if (event) event.stopPropagation();
+            if (!key) return;
+            navigator.clipboard.writeText(key).then(() => {
+                showToast('API key copied to clipboard');
+            }).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = key;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast('API key copied to clipboard');
+            });
+        }
+
+        function startBot(event, link) {
+            if (event) event.stopPropagation();
+            if (link && link !== '#') {
+                window.open(link, '_blank');
+            } else {
+                showToast('Bot link not available');
+            }
+        }
+
+        function closeProductPage() {
+            const overlay = document.getElementById('product-modal-overlay');
+            const content = document.getElementById('product-modal-content');
+
+            overlay.classList.remove('opacity-100');
+            overlay.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            document.body.classList.remove('product-modal-open');
+
+            // Remove product UUID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.delete('product');
+            const newUrl = urlParams.toString() ? `${window.location.pathname}?${urlParams.toString()}` : window.location.pathname;
+            history.pushState(history.state, '', newUrl);
+
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                currentProduct = null;
+                enrollmentStatus = null;
+            }, 300);
+        }
+
+        function closeProductPageOnOverlay(event) {
+            if (event.target === event.currentTarget) closeProductPage();
+        }
+
+        async function checkUrlProductParam() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('product');
+            if (!productId) return;
+
+            // Already open?
+            if (currentProduct && currentProduct.id === productId) return;
+
+            // 1) Try already rendered card in the DOM
+            const card = document.querySelector(`.nft-card[data-id="${productId}"]`);
+            if (card) {
+                const product = {
+                    id: card.dataset.id,
+                    title: card.dataset.title,
+                    description: card.dataset.description,
+                    price: parseFloat(card.dataset.price),
+                    image: card.dataset.image,
+                    type: card.dataset.type,
+                    productSection: parseInt(card.dataset.section),
+                    isPurchased: card.dataset.purchased === 'true',
+                    expiry: card.dataset.expiry || null,
+                    apiKey: card.dataset.apiKey || null,
+                    telegramId: card.dataset.telegramId || null,
+                    userTelegramId: card.dataset.userTelegramId || null,
+                    details: {}
+                };
+                openProductPage(product);
+                return;
+            }
+
+            // 2) Card not loaded yet — fetch directly from backend
+            const token = localStorage.getItem('token');
+            const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+
+            // Try Course
+            try {
+                const res = await fetch(`/public/courses/${productId}`, { headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    const product = {
+                        id: data.product_uuid,
+                        title: data.title,
+                        description: data.description,
+                        price: data.price,
+                        image: data.course_thumbnail,
+                        type: 'Course',
+                        productSection: 1,
+                        isPurchased: data.is_purchased,
+                        details: {}
+                    };
+                    openProductPage(product);
+                    return;
+                }
+            } catch (e) {}
+
+            // Try Indicator
+            try {
+                const res = await fetch(`/public/indicators/${productId}`, { headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    const product = {
+                        id: data.product_uuid,
+                        title: data.indicator_name,
+                        description: data.indicator_description || '',
+                        price: data.indicator_price,
+                        image: data.showcase_image,
+                        type: 'Indicator',
+                        productSection: 2,
+                        isPurchased: data.is_purchased,
+                        details: {}
+                    };
+                    openProductPage(product);
+                    return;
+                }
+            } catch (e) {}
+
+            // Try Bot
+            try {
+                const res = await fetch(`/public/bots/${productId}`, { headers });
+                if (res.ok) {
+                    const data = await res.json();
+                    const product = {
+                        id: data.product_uuid,
+                        title: data.display_name || data.bot_name,
+                        description: data.description || '',
+                        price: data.price,
+                        image: data.thumbnail,
+                        type: 'Bot',
+                        productSection: 3,
+                        isPurchased: data.is_purchased,
+                        apiKey: data.api_key || null,
+                        telegramId: data.telegram_id || null,
+                        userTelegramId: data.user_telegram_id || null,
+                        expiry: data.expiry || null,
+                        details: {}
+                    };
+                    openProductPage(product);
+                    return;
+                }
+            } catch (e) {}
+        }
+
+        function toggleCartFromProductPage(btnElement) {
+            if (!currentProduct) return;
+            const existingIndex = cartState.findIndex(item => item.id == currentProduct.id && item.product_section == currentProduct.productSection);
+
+            if (existingIndex > -1) {
+                cartState.splice(existingIndex, 1);
+            } else {
+                cartState.push({
+                    id: currentProduct.id,
+                    title: currentProduct.title,
+                    price: currentProduct.price,
+                    image: currentProduct.image,
+                    type: currentProduct.type,
+                    product_section: currentProduct.productSection
+                });
+            }
+            saveCart();
+            renderCart();
+
+            // Re-render the product view to update button state
+            const isInCart = cartState.some(item => item.id == currentProduct.id && item.product_section == currentProduct.productSection);
+            const contentEl = document.getElementById('product-view-content');
+
+            if (currentProduct.type === 'Course' && currentProduct.isPurchased) {
+                contentEl.innerHTML = buildScheduleView(currentProduct);
+            } else if (currentProduct.type === 'Course') {
+                contentEl.innerHTML = buildPurchaseView(currentProduct, isInCart);
+            } else if (currentProduct.type === 'Indicator') {
+                contentEl.innerHTML = buildIndicatorView(currentProduct, isInCart, currentProduct.isPurchased);
+            } else if (currentProduct.type === 'Bot') {
+                contentEl.innerHTML = buildBotView(currentProduct, isInCart, currentProduct.isPurchased);
+            }
+
+            const desc = contentEl.querySelector('.pv-description');
+            if (desc) {
+                desc.addEventListener('click', () => desc.classList.toggle('expanded'));
+            }
+
+            updateFabButton(null);
+
+            // Update card button too
+            const relatedCard = document.querySelector(`.nft-card[data-id="${currentProduct.id}"]`);
+            if (relatedCard) {
+                const cartBtn = relatedCard.querySelector('.add-to-cart-btn');
+                if (cartBtn) {
+                    if (existingIndex > -1) {
+                        cartBtn.classList.remove('added');
+                    } else {
+                        cartBtn.classList.add('added');
+                    }
+                }
+            }
+        }
+
+        function handleCardClick(event, cardElement) {
+            if (event.target.closest('button')) return;
+
+            const product = {
+                id: cardElement.dataset.id,
+                title: cardElement.dataset.title,
+                description: cardElement.dataset.description,
+                price: parseFloat(cardElement.dataset.price),
+                image: cardElement.dataset.image,
+                type: cardElement.dataset.type,
+                productSection: parseInt(cardElement.dataset.section),
+                isPurchased: cardElement.dataset.purchased === 'true',
+                expiry: cardElement.dataset.expiry || null,
+                apiKey: cardElement.dataset.apiKey || null,
+                telegramId: cardElement.dataset.telegramId || null,
+                userTelegramId: cardElement.dataset.userTelegramId || null,
+                details: {}
+            };
+
+            if (product.type === 'Course') {
+                product.details = {};
+            }
+
+            openProductPage(product);
+        }
+
+        // --- AUTH & REDIRECT LOGIC ---
+        function checkAuthState() {
+            const token = localStorage.getItem('token');
+            const signoutBtn = document.getElementById('btn-signout');
+            const signinBtn = document.getElementById('btn-signin');
+            const nameDisplay = document.getElementById('auth-display-name');
+            const roleDisplay = document.getElementById('auth-display-role');
+            const avatarIcon = document.getElementById('avatar-icon');
+
+            if (token) {
+                // User is Logged In - Show Sign Out
+                signoutBtn.classList.remove('hidden');
+                signinBtn.classList.add('hidden');
+                if (avatarIcon) {
+                    avatarIcon.classList.remove('ph-user-plus');
+                    avatarIcon.classList.add('ph-user');
+                }
+                // Fetch and inject their actual database info
+                fetchUserProfile(token);
+            } else {
+                // User is a Guest - Show Sign In
+                signoutBtn.classList.add('hidden');
+                signinBtn.classList.remove('hidden');
+                nameDisplay.innerText = "Guest Account";
+                roleDisplay.innerText = "Not logged in";
+                if (avatarIcon) {
+                    avatarIcon.classList.remove('ph-user');
+                    avatarIcon.classList.add('ph-user-plus');
+                }
+            }
+        }
+
+        function toggleAvatarDropdown(event) {
+            event.stopPropagation();
+            const dropdown = document.querySelector('.dropdown-menu');
+            if (!dropdown) return;
+            dropdown.classList.toggle('show-dropdown');
+        }
+
+        document.addEventListener('click', (e) => {
+            const container = document.getElementById('avatar-container');
+            const dropdown = document.querySelector('.dropdown-menu');
+            if (container && dropdown && !container.contains(e.target)) {
+                dropdown.classList.remove('show-dropdown');
+            }
+        });
+
+        // Fetch user data from backend
+        async function fetchUserProfile(token) {
+            try {
+                const response = await fetch('/users/me', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                
+                if (response.ok) {
+                    const user = await response.json();
+                    
+                    // Update the dropdown menu with their actual Name and UserID
+                    document.getElementById('auth-display-name').innerText = user.UserName;
+                    document.getElementById('auth-display-role').innerText = '@' + user.UserID;
+                } else {
+                    // Token expired or invalid
+                    logout();
+                }
+            } catch (error) {
+                console.error("Failed to fetch user profile:", error);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.reload(); 
+        }
+
+        function goToLogin() {
+            window.location.href = '/auth/login'; 
+        }
+        
+        window.addEventListener('DOMContentLoaded', async () => {
+            checkAuthState(); // Update Dropdown UI
+
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    const res = await fetch('/my-purchases', {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        // Handle both old format (array) and new format (object with courses/indicators/bots)
+                        if (Array.isArray(data)) {
+                            purchasedCourseIds = data;
+                        } else {
+                            purchasedCourseIds = data.courses || [];
+                            purchasedIndicatorIds = data.indicators || [];
+                            purchasedBotIds = data.bots || [];
+                        }
+                    }
+                } catch (e) { console.error("Failed to fetch purchases"); }
+            }
+            
+            const activeNav = document.querySelector('.nav-item.active');
+            const indicator = document.getElementById('nav-indicator');
+            if (activeNav && indicator) {
+                indicator.style.top = activeNav.offsetTop + 'px';
+                indicator.style.height = activeNav.offsetHeight + 'px';
+                setTimeout(() => { indicator.classList.remove('opacity-0'); }, 50);
+            }
+            
+            renderCart();
+            renderLibrary();
+            routeByPath(); // Load section based on current URL
+            startCountdownTimer();
+
+            // Infinite scroll listener
+            const scrollGrid = document.getElementById('scrollable-grid');
+            if (scrollGrid) {
+                scrollGrid.addEventListener('scroll', () => {
+                    if (isLoading || searchMode) return;
+                    const { scrollTop, scrollHeight, clientHeight } = scrollGrid;
+                    if (scrollTop + clientHeight >= scrollHeight - 200) {
+                        const activeNav = document.querySelector('.nav-item.active');
+                        const section = activeNav ? activeNav.getAttribute('href').replace(/^\//, '') : 'courses';
+                        if (section === 'courses') {
+                            courseSkip += courseLimit;
+                            fetchCourses(true);
+                        } else if (section === 'indicators') {
+                            indicatorSkip += indicatorLimit;
+                            fetchIndicators(true);
+                        } else if (section === 'alerts') {
+                            botSkip += botLimit;
+                            fetchBots(true);
+                        }
+                    }
+                });
+            }
+        });
+
+        // --- SEARCH LOGIC ---
+        function toggleSearch() {
+            searchMode = !searchMode;
+            const headerText = document.getElementById('header-text');
+            const searchBar = document.getElementById('search-bar');
+            const searchBtn = document.getElementById('search-toggle-btn');
+            const searchInput = document.getElementById('search-input');
+
+            if (searchMode) {
+                // Shrink title out
+                headerText.classList.remove('flex-1');
+                headerText.classList.add('w-0', 'opacity-0', 'overflow-hidden');
+                // Grow search input in
+                searchBar.classList.remove('w-0', 'opacity-0', 'overflow-hidden', 'pointer-events-none');
+                searchBar.classList.add('flex-1', 'opacity-100');
+                searchBtn.innerHTML = '<i class="ph ph-x text-[18px]"></i>';
+                searchBtn.classList.add('text-brand');
+                setTimeout(() => searchInput.focus(), 50);
+            } else {
+                closeSearch();
+            }
+        }
+
+        function closeSearch() {
+            searchMode = false;
+            const headerText = document.getElementById('header-text');
+            const searchBar = document.getElementById('search-bar');
+            const searchBtn = document.getElementById('search-toggle-btn');
+            const searchInput = document.getElementById('search-input');
+
+            // Grow title back in
+            headerText.classList.remove('w-0', 'opacity-0', 'overflow-hidden');
+            headerText.classList.add('flex-1');
+            // Shrink search out
+            searchBar.classList.remove('flex-1', 'opacity-100');
+            searchBar.classList.add('w-0', 'opacity-0', 'overflow-hidden', 'pointer-events-none');
+            searchBtn.innerHTML = '<i class="ph ph-magnifying-glass text-[18px]"></i>';
+            searchBtn.classList.remove('text-brand');
+            searchInput.value = '';
+            lastSearchQuery = '';
+
+            // Restore the current section view
+            const activeNav = document.querySelector('.nav-item.active');
+            const section = activeNav ? activeNav.getAttribute('href').replace(/^\//, '') : 'courses';
+            loadSection(section);
+        }
+
+        function clearSearch() {
+            const searchInput = document.getElementById('search-input');
+            searchInput.value = '';
+            lastSearchQuery = '';
+            searchInput.focus();
+            // Show empty state or restore section
+            const activeNav = document.querySelector('.nav-item.active');
+            const section = activeNav ? activeNav.getAttribute('href').replace(/^\//, '') : 'courses';
+            loadSection(section);
+        }
+
+        function debouncedSearch(query) {
+            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+            lastSearchQuery = query.trim();
+            if (!lastSearchQuery) {
+                const activeNav = document.querySelector('.nav-item.active');
+                const section = activeNav ? activeNav.getAttribute('href').replace(/^\//, '') : 'courses';
+                loadSection(section);
+                return;
+            }
+            searchDebounceTimer = setTimeout(() => performSearch(lastSearchQuery), 300);
+        }
+
+        async function performSearch(query) {
+            const actualCards = document.getElementById('actual-cards-container');
+            const skeletonCards = document.getElementById('skeleton-container');
+
+            actualCards.classList.add('hidden');
+            skeletonCards.classList.remove('hidden');
+
+            try {
+                const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                const results = await response.json();
+
+                actualCards.innerHTML = '';
+                document.getElementById('page-title').innerText = 'Search Results';
+                document.getElementById('page-icon').className = 'ph ph-magnifying-glass text-[20px] text-gray-700';
+                if (!Array.isArray(results) || results.length === 0) {
+                    actualCards.innerHTML = `
+                        <div class="col-span-full text-center py-10">
+                            <i class="ph ph-magnifying-glass text-4xl text-gray-300 mb-3"></i>
+                            <p class="text-gray-500 font-medium">No results found for "${query}"</p>
+                            <p class="text-gray-400 text-sm mt-1">Try a different keyword</p>
+                        </div>`;
+                } else {
+                    results.forEach(item => {
+                        let isInCart = false;
+                        let isPurchased = false;
+                        let productSection = 1;
+                        let itemType = 'Course';
+
+                        if (item.section === 'course') {
+                            productSection = 1;
+                            itemType = 'Course';
+                            isInCart = cartState.some(c => c.id == item.product_uuid && c.product_section == 1);
+                            isPurchased = purchasedCourseIds.includes(item.product_uuid);
+                        } else if (item.section === 'indicator') {
+                            productSection = 2;
+                            itemType = 'Indicator';
+                            isInCart = cartState.some(c => c.id == item.product_uuid && c.product_section == 2);
+                            isPurchased = purchasedIndicatorIds.includes(item.product_uuid);
+                        } else if (item.section === 'bot') {
+                            productSection = 3;
+                            itemType = 'Bot';
+                            isInCart = cartState.some(c => c.id == item.product_uuid && c.product_section == 3);
+                            isPurchased = purchasedBotIds.includes(item.product_uuid);
+                        }
+
+                        const cartBtnClass = isInCart ? "cart-btn ml-2 add-to-cart-btn added" : "cart-btn ml-2 add-to-cart-btn";
+
+                        let priceTagHtml = '';
+                        let actionBtnHtml = '';
+
+                        if (isPurchased) {
+                            priceTagHtml = `
+                                <div class="price-tag">
+                                    <i class="ph ph-check-circle text-green-500 font-bold"></i>
+                                    <span class="timer-text font-bold text-[12px] text-green-600">Purchased</span>
+                                </div>`;
+                            actionBtnHtml = `
+                                <button class="cart-btn ml-2 join-btn opacity-40 bg-gray-200 cursor-not-allowed pointer-events-none" aria-label="Purchased">
+                                    <i class="ph ph-check-circle text-xl text-green-500"></i>
+                                </button>`;
+                        } else {
+                            priceTagHtml = `
+                                <div class="price-tag">
+                                    <span class="text-brand font-bold">$</span>
+                                    <span>${item.price.toFixed(2)}</span>
+                                </div>`;
+                            actionBtnHtml = `
+                                <button class="${cartBtnClass}" onclick="toggleCart(this, event, '${item.id}', '${item.title.replace(/'/g, "\\'")}', ${item.price}, '${item.thumbnail || 'https://via.placeholder.com/150'}', '${itemType}', ${productSection})" aria-label="Add to Cart">
+                                    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle>
+                                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                    </svg>
+                                </button>`;
+                        }
+
+                        const cardHtml = `
+                            <div class="nft-card" data-id="${item.id}" data-title="${item.title.replace(/"/g, '&quot;')}" data-description="${(item.description || '').replace(/"/g, '&quot;')}" data-price="${item.price}" data-image="${item.thumbnail || 'https://via.placeholder.com/150'}" data-type="${itemType}" data-section="${productSection}" data-purchased="${isPurchased}" onclick="handleCardClick(event, this)">
+                                <div class="image-container">
+                                    <img src="${item.thumbnail || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${item.title}" class="nft-image">
+                                    <div class="absolute top-2 left-2 px-2 py-0.5 bg-white/90 backdrop-blur-sm rounded-lg text-[10px] font-bold uppercase tracking-wider text-brand shadow-sm">
+                                        ${itemType}
+                                    </div>
+                                    <button class="like-btn" onclick="toggleLike(this, event)" aria-label="Like">
+                                        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                        </svg>
+                                    </button>
+                                    ${priceTagHtml}
+                                </div>
+                                <div class="info-section">
+                                    <div class="text-content">
+                                        <h3 class="title" title="${item.title}">${item.title}</h3>
+                                        <p class="description" title="${item.description}">${item.description || 'No description provided.'}</p>
+                                    </div>
+                                    ${actionBtnHtml}
+                                </div>
+                            </div>
+                        `;
+                        actualCards.innerHTML += cardHtml;
+                    });
+                }
+            } catch (error) {
+                actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-red-500 font-bold text-sm bg-red-50 rounded-2xl border border-red-100">Search failed. Is the backend running?</div>';
+            } finally {
+                skeletonCards.classList.add('hidden');
+                actualCards.classList.remove('hidden');
+            }
+        }
+
+        // --- SPA ROUTING ---
+        function navigateTo(event, section) {
+            event.preventDefault();
+            if (searchMode) closeSearch();
+            if (currentProduct) closeProductPage();
+            const path = '/' + section;
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.delete('product');
+            const query = urlParams.toString() ? '?' + urlParams.toString() : '';
+            const newUrl = path + query;
+            if (window.location.pathname !== path) {
+                history.pushState({ section }, '', newUrl);
+            }
+            const parts = section.split('/');
+            const mainSection = parts[0];
+            const sub = parts[1] || null;
+            if (mainSection === 'settings') {
+                loadSection('settings', sub);
+            } else {
+                loadSection(section);
+            }
+        }
+
+        function routeByPath() {
+            if (searchMode) closeSearch();
+            const fullPath = window.location.pathname.replace(/^\//, '');
+            const parts = fullPath.split('/');
+            const section = parts[0] || 'courses';
+            const sub = parts[1] || null;
+            const errorField = new URLSearchParams(window.location.search).get('error');
+
+            const validSections = ['courses', 'indicators', 'alerts', 'settings'];
+            if (!validSections.includes(section)) {
+                loadSection('courses');
+                return;
+            }
+            if (section === 'settings' && sub === 'account') {
+                loadSection('settings', 'account', errorField);
+            } else if (section === 'settings' && sub === 'preferences') {
+                loadSection('settings', 'preferences');
+            } else {
+                loadSection(section);
+            }
+        }
+
+        function selectMobileNav(activeElement) {
+            const mobileItems = document.querySelectorAll('.mobile-nav-item');
+            mobileItems.forEach(item => {
+                item.classList.remove('text-brand', 'active');
+                item.classList.add('text-gray-400');
+            });
+            if (activeElement) {
+                activeElement.classList.remove('text-gray-400');
+                activeElement.classList.add('text-brand', 'active');
+            }
+        }
+
+        function loadSection(section, sub, errorField) {
+            const navItems = document.querySelectorAll('.nav-item');
+            const targetNav = Array.from(navItems).find(el => el.getAttribute('href') === '/' + section);
+            if (targetNav) selectNav(targetNav, null);
+
+            const mobileNavItems = document.querySelectorAll('.mobile-nav-item');
+            const targetMobileNav = Array.from(mobileNavItems).find(el => el.getAttribute('href') === '/' + section);
+            if (targetMobileNav) selectMobileNav(targetMobileNav);
+
+            const scrollGrid = document.getElementById('scrollable-grid');
+            if (scrollGrid) scrollGrid.scrollTop = 0;
+
+            if (section === 'courses') fetchCourses();
+            else if (section === 'indicators') fetchIndicators();
+            else if (section === 'alerts') fetchBots();
+            else if (section === 'settings') {
+                if (sub === 'account') showAccountPage(errorField);
+                else if (sub === 'preferences') showPreferencesPage();
+                else fetchSettings();
+            }
+        }
+
+        window.addEventListener('popstate', (e) => {
+            routeByPath();
+            const urlParams = new URLSearchParams(window.location.search);
+            const productId = urlParams.get('product');
+            if (productId && !currentProduct) {
+                checkUrlProductParam();
+            } else if (!productId && currentProduct) {
+                closeProductPage();
+            }
+        });
+
+        // --- ALERT BOTS LOGIC ---
+        async function fetchBots(append = false) {
+            document.getElementById('page-title').innerText = "Alerts";
+            document.getElementById('page-icon').className = 'ph ph-bell-ringing text-[20px] text-gray-700';
+            const actualCards = document.getElementById('actual-cards-container');
+            const skeletonCards = document.getElementById('skeleton-container');
+
+            if (!append) {
+                botSkip = 0;
+                hasMoreBots = true;
+                actualCards.innerHTML = '';
+            }
+
+            if (append && !hasMoreBots) return;
+            if (isLoading) return;
+
+            if (!append) {
+                actualCards.classList.add('hidden');
+                skeletonCards.classList.remove('hidden');
+            }
+            isLoading = true;
+
+            try {
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const response = await fetch(`/public/bots?skip=${botSkip}&limit=${botLimit}`, { headers });
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                const bots = await response.json();
+
+                if (!Array.isArray(bots)) {
+                    throw new Error("Invalid response format");
+                }
+
+                if (bots.length === 0 && !append) {
+                    actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500 font-medium">No alert bots available yet.</div>';
+                } else {
+                    bots.forEach(bot => {
+                        const isPurchased = bot.is_purchased;
+                        const isInCart = cartState.some(item => item.id == bot.product_uuid && item.product_section == 3);
+                        const cartBtnClass = isInCart ? "cart-btn ml-2 add-to-cart-btn added" : "cart-btn ml-2 add-to-cart-btn";
+
+                        let priceTagHtml = '';
+                        let actionBtnHtml = '';
+
+                        if (isPurchased) {
+                            const apiKey = bot.api_key || '';
+                            const truncatedKey = apiKey ? apiKey.substring(0, 7) + '...' : 'No Key';
+                            const botTgId = bot.telegram_id || '';
+                            const startLink = botTgId ? `https://t.me/${botTgId}?start=${apiKey}` : '#';
+                            priceTagHtml = `
+                                <div class="price-tag" style="gap: 6px; padding: 4px 8px;">
+                                    <span class="font-bold text-[12px] text-brand">${truncatedKey}</span>
+                                    <button class="copy-key-btn" onclick="copyApiKey(event, '${apiKey}')" title="Copy full key" style="background:none;border:none;padding:0;cursor:pointer;display:flex;align-items:center;">
+                                        <i class="ph ph-copy text-brand text-[12px]"></i>
+                                    </button>
+                                </div>`;
+                            actionBtnHtml = `
+                                <button class="cart-btn ml-2 start-btn" style="background: linear-gradient(135deg, #4C4AE3, #6B68FF); color: white; border-radius: 12px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(76, 74, 227, 0.3); border: none;" onclick="startBot(event, '${startLink}')" aria-label="Start Bot">
+                                    <i class="ph ph-telegram-logo text-xl"></i>
+                                </button>`;
+                        } else {
+                            priceTagHtml = `
+                                <div class="price-tag">
+                                    <span class="text-brand font-bold">$</span>
+                                    <span>${bot.price.toFixed(2)}</span>
+                                </div>`;
+                            actionBtnHtml = `
+                                <button class="${cartBtnClass}" onclick="toggleCart(this, event, '${bot.product_uuid}', '${bot.display_name.replace(/'/g, "\\'")}', ${bot.price}, '${bot.thumbnail || 'https://via.placeholder.com/150'}', 'Bot', 3)" aria-label="Add to Cart">
+                                    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle>
+                                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                    </svg>
+                                </button>`;
+                        }
+
+                        const cardHtml = `
+                            <div class="nft-card" data-id="${bot.product_uuid}" data-title="${bot.display_name.replace(/"/g, '&quot;')}" data-description="${(bot.description || '').replace(/"/g, '&quot;')}" data-price="${bot.price}" data-image="${bot.thumbnail || 'https://via.placeholder.com/150'}" data-type="Bot" data-section="3" data-purchased="${isPurchased}" data-expiry="${bot.expiry || ''}" data-api-key="${bot.api_key || ''}" data-telegram-id="${bot.telegram_id || ''}" data-user-telegram-id="${bot.user_telegram_id || ''}" onclick="handleCardClick(event, this)">
+                                <div class="image-container">
+                                    <img src="${bot.thumbnail || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="Bot Thumbnail" class="nft-image">
+                                    <button class="like-btn" onclick="toggleLike(this, event)" aria-label="Like">
+                                        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                        </svg>
+                                    </button>
+                                    ${priceTagHtml}
+                                </div>
+                                <div class="info-section">
+                                    <div class="text-content">
+                                        <h3 class="title" title="${bot.display_name}">${bot.display_name}</h3>
+                                        <p class="description" title="${bot.description}">${bot.description || 'No description provided.'}</p>
+                                    </div>
+                                    ${actionBtnHtml}
+                                </div>
+                            </div>
+                        `;
+                        actualCards.innerHTML += cardHtml;
+                    });
+
+                    hasMoreBots = bots.length === botLimit;
+                }
+            } catch (error) {
+                if (!append) {
+                    actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-red-500 font-bold text-sm bg-red-50 rounded-2xl border border-red-100">Failed to load alert bots. Is the backend running?</div>';
+                }
+            } finally {
+                if (!append) {
+                    skeletonCards.classList.add('hidden');
+                    actualCards.classList.remove('hidden');
+                }
+                isLoading = false;
+                checkUrlProductParam();
+            }
+        }
+
+        // Main Fetch and Render Logic (Courses)
+        async function fetchCourses(append = false) {
+            document.getElementById('page-title').innerText = "Courses";
+            document.getElementById('page-icon').className = 'ph ph-graduation-cap text-[20px] text-gray-700';
+            const actualCards = document.getElementById('actual-cards-container');
+            const skeletonCards = document.getElementById('skeleton-container');
+
+            if (!append) {
+                courseSkip = 0;
+                hasMoreCourses = true;
+                actualCards.innerHTML = '';
+            }
+
+            if (append && !hasMoreCourses) return;
+            if (isLoading) return;
+
+            if (!append) {
+                actualCards.classList.add('hidden');
+                skeletonCards.classList.remove('hidden');
+            }
+            isLoading = true;
+
+            try {
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const response = await fetch(`/public/courses?skip=${courseSkip}&limit=${courseLimit}`, { headers });
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                const courses = await response.json();
+
+                if (!Array.isArray(courses)) {
+                    throw new Error("Invalid response format");
+                }
+
+                if (courses.length === 0 && !append) {
+                    actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500 font-medium">No courses available yet. Upload some via the dashboard!</div>';
+                } else {
+                    courses.forEach(course => {
+                        const isPurchased = course.is_purchased;
+                        const isInCart = cartState.some(item => item.id == course.id);
+                        const cartBtnClass = isInCart ? "cart-btn ml-2 add-to-cart-btn added" : "cart-btn ml-2 add-to-cart-btn";
+
+                        let descriptionText = course.description || '';
+                        let descriptionTitle = course.description || '';
+                        if (isPurchased && course.is_assigned && course.next_chapter_title) {
+                            if (course.is_ongoing) {
+                                descriptionText = 'Live Now';
+                                descriptionTitle = 'Live Now';
+                            } else {
+                                const truncatedTitle = course.next_chapter_title.length > 30 ? course.next_chapter_title.substring(0, 30) + '...' : course.next_chapter_title;
+                                const chIdx = course.next_chapter_index != null ? course.next_chapter_index : '';
+                                descriptionText = `Chapter ${chIdx}: ${truncatedTitle}`;
+                                descriptionTitle = `Chapter ${chIdx}: ${course.next_chapter_title}`;
+                            }
+                        }
+
+                        let priceTagHtml = '';
+                        let actionBtnHtml = '';
+
+                        if (isPurchased) {
+                            priceTagHtml = `
+                                <div class="price-tag countdown-wrapper" data-scheduled="${course.scheduled_at}" data-duration="${course.estimated_duration}" data-ongoing="${course.is_ongoing || false}">
+                                    <i class="ph ph-clock text-brand font-bold"></i>
+                                    <span class="timer-text font-bold text-[12px]">Calculating...</span>
+                                </div>`;
+
+                            actionBtnHtml = `
+                                <button class="cart-btn ml-2 join-btn opacity-40 bg-gray-200 cursor-not-allowed pointer-events-none" aria-label="Not Started" data-link="${course.course_link}">
+                                    <i class="ph ph-play-circle text-xl text-gray-600"></i>
+                                </button>`;
+                        } else {
+                            priceTagHtml = `
+                                <div class="price-tag">
+                                    <span class="text-brand font-bold">$</span>
+                                    <span>${course.price.toFixed(2)}</span>
+                                </div>`;
+                            
+                            actionBtnHtml = `
+                                <button class="${cartBtnClass}" onclick="toggleCart(this, event, '${course.product_uuid}', '${course.title.replace(/'/g, "\\'")}', ${course.price}, '${course.course_thumbnail}', 'Course', 1)" aria-label="Add to Cart">
+                                    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle>
+                                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                    </svg>
+                                </button>`;
+                        }
+
+                        const cardHtml = `
+                            <div class="nft-card" data-id="${course.product_uuid}" data-title="${course.title.replace(/"/g, '&quot;')}" data-description="${(course.description || '').replace(/"/g, '&quot;')}" data-price="${course.price}" data-image="${course.course_thumbnail}" data-type="Course" data-section="1" data-purchased="${isPurchased}" onclick="handleCardClick(event, this)">
+                                <div class="image-container">
+                                    <img src="${course.course_thumbnail}" alt="Course Thumbnail" class="nft-image">
+                                    <button class="like-btn" onclick="toggleLike(this, event)" aria-label="Like">
+                                        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                        </svg>
+                                    </button>
+                                    ${priceTagHtml}
+                                </div>
+                                <div class="info-section">
+                                    <div class="text-content">
+                                        <h3 class="title" title="${course.title}">${course.title}</h3>
+                                        <p class="description" title="${descriptionTitle}">${descriptionText}</p>
+                                    </div>
+                                    ${actionBtnHtml}
+                                </div>
+                            </div>
+                        `;
+                        actualCards.innerHTML += cardHtml;
+                    });
+
+                    hasMoreCourses = courses.length === courseLimit;
+                }
+            } catch (error) {
+                if (!append) {
+                    actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-red-500 font-bold text-sm bg-red-50 rounded-2xl border border-red-100">Failed to load courses. Is the backend running?</div>';
+                }
+            } finally {
+                if (!append) {
+                    skeletonCards.classList.add('hidden');
+                    actualCards.classList.remove('hidden');
+                }
+                isLoading = false;
+                forceTimerUpdate();
+                checkUrlProductParam();
+            }
+        }
+
+        // --- NEW: Fetch Indicators Logic ---
+        async function fetchIndicators(append = false) {
+            document.getElementById('page-title').innerText = "Indicators";
+            document.getElementById('page-icon').className = 'ph ph-chart-line-up text-[20px] text-gray-700';
+            const actualCards = document.getElementById('actual-cards-container');
+            const skeletonCards = document.getElementById('skeleton-container');
+
+            if (!append) {
+                indicatorSkip = 0;
+                hasMoreIndicators = true;
+                actualCards.innerHTML = '';
+            }
+
+            if (append && !hasMoreIndicators) return;
+            if (isLoading) return;
+
+            if (!append) {
+                actualCards.classList.add('hidden');
+                skeletonCards.classList.remove('hidden');
+            }
+            isLoading = true;
+
+            try {
+                const token = localStorage.getItem('token');
+                const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+                const response = await fetch(`/public/indicators?skip=${indicatorSkip}&limit=${indicatorLimit}`, { headers });
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                const indicators = await response.json();
+
+                if (!Array.isArray(indicators)) {
+                    throw new Error("Invalid response format");
+                }
+
+                if (indicators.length === 0 && !append) {
+                    actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500 font-medium">No indicators available yet.</div>';
+                } else {
+                    indicators.forEach(indicator => {
+                        const isPurchased = indicator.is_purchased;
+                        const isInCart = cartState.some(item => item.id == indicator.product_uuid && item.product_section == 2);
+                        const cartBtnClass = isInCart ? "cart-btn ml-2 add-to-cart-btn added" : "cart-btn ml-2 add-to-cart-btn";
+
+                        let priceTagHtml = '';
+                        let actionBtnHtml = '';
+
+                        if (isPurchased) {
+                            priceTagHtml = `
+                                <div class="price-tag">
+                                    <i class="ph ph-check-circle text-green-500 font-bold"></i>
+                                    <span class="timer-text font-bold text-[12px] text-green-600">Purchased</span>
+                                </div>`;
+                            actionBtnHtml = `
+                                <button class="cart-btn ml-2 join-btn opacity-40 bg-gray-200 cursor-not-allowed pointer-events-none" aria-label="Purchased">
+                                    <i class="ph ph-check-circle text-xl text-green-500"></i>
+                                </button>`;
+                        } else {
+                            priceTagHtml = `
+                                <div class="price-tag">
+                                    <span class="text-brand font-bold">$</span>
+                                    <span>${indicator.indicator_price.toFixed(2)}</span>
+                                </div>`;
+                            actionBtnHtml = `
+                                <button class="${cartBtnClass}" onclick="toggleCart(this, event, '${indicator.product_uuid}', '${indicator.indicator_name.replace(/'/g, "\\'")}', ${indicator.indicator_price}, '${indicator.showcase_image || 'https://via.placeholder.com/150'}', 'Indicator', 2)" aria-label="Add to Cart">
+                                    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle>
+                                        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+                                    </svg>
+                                </button>`;
+                        }
+
+                        const cardHtml = `
+                            <div class="nft-card" data-id="${indicator.product_uuid}" data-title="${indicator.indicator_name.replace(/"/g, '&quot;')}" data-description="${(indicator.indicator_description || '').replace(/"/g, '&quot;')}" data-price="${indicator.indicator_price}" data-image="${indicator.showcase_image || 'https://via.placeholder.com/150'}" data-type="Indicator" data-section="2" data-purchased="${isPurchased}" data-expiry="${indicator.expiry || ''}" onclick="handleCardClick(event, this)">
+                                <div class="image-container">
+                                    <img src="${indicator.showcase_image || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="Indicator Thumbnail" class="nft-image">
+                                    <button class="like-btn" onclick="toggleLike(this, event)" aria-label="Like">
+                                        <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                        </svg>
+                                    </button>
+                                    ${priceTagHtml}
+                                </div>
+                                <div class="info-section">
+                                    <div class="text-content">
+                                        <h3 class="title" title="${indicator.indicator_name}">${indicator.indicator_name}</h3>
+                                        <p class="description" title="${indicator.indicator_description}">${indicator.indicator_description || 'No description provided.'}</p>
+                                    </div>
+                                    ${actionBtnHtml}
+                                </div>
+                            </div>
+                        `;
+                        actualCards.innerHTML += cardHtml;
+                    });
+
+                    hasMoreIndicators = indicators.length === indicatorLimit;
+                }
+            } catch (error) {
+                if (!append) {
+                    actualCards.innerHTML = '<div class="col-span-full text-center py-10 text-red-500 font-bold text-sm bg-red-50 rounded-2xl border border-red-100">Failed to load indicators. Is the backend running?</div>';
+                }
+            } finally {
+                if (!append) {
+                    skeletonCards.classList.add('hidden');
+                    actualCards.classList.remove('hidden');
+                }
+                isLoading = false;
+                checkUrlProductParam();
+            }
+        }
+
+        // --- SETTINGS LOGIC ---
+        async function fetchSettings() {
+            document.getElementById('page-title').innerText = "Settings";
+            document.getElementById('page-icon').className = 'ph ph-gear text-[20px] text-gray-700';
+            const actualCards = document.getElementById('actual-cards-container');
+            const skeletonCards = document.getElementById('skeleton-container');
+
+            actualCards.innerHTML = '';
+            actualCards.classList.add('hidden');
+            skeletonCards.classList.remove('hidden');
+
+            actualCards.innerHTML = `
+                <div class="col-span-full flex flex-col gap-3 max-w-2xl mx-auto w-full">
+                    <!-- Account Row -->
+                    <a href="/settings/account" onclick="navigateTo(event, 'settings/account')" class="w-full bg-white rounded-[1.75rem] p-5 shadow-card flex items-center justify-between hover:bg-gray-50/50 transition-colors group text-left">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl bg-brand/10 flex items-center justify-center text-brand">
+                                <i class="ph ph-user-circle text-2xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-[15px] font-bold text-gray-900">Account</p>
+                                <p class="text-xs text-gray-500 mt-0.5">Profile, password & security</p>
+                            </div>
+                        </div>
+                        <i class="ph ph-caret-right text-xl text-gray-300 group-hover:text-brand transition-colors"></i>
+                    </a>
+
+                    <!-- Preferences Row -->
+                    <a href="/settings/preferences" onclick="navigateTo(event, 'settings/preferences')" class="w-full bg-white rounded-[1.75rem] p-5 shadow-card flex items-center justify-between hover:bg-gray-50/50 transition-colors group text-left">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-2xl bg-green-50 flex items-center justify-center text-green-500">
+                                <i class="ph ph-sliders-horizontal text-2xl"></i>
+                            </div>
+                            <div>
+                                <p class="text-[15px] font-bold text-gray-900">Preferences</p>
+                                <p class="text-xs text-gray-500 mt-0.5">Notifications & appearance</p>
+                            </div>
+                        </div>
+                        <i class="ph ph-caret-right text-xl text-gray-300 group-hover:text-brand transition-colors"></i>
+                    </a>
+                </div>
+            `;
+
+            skeletonCards.classList.add('hidden');
+            actualCards.classList.remove('hidden');
+        }
+
+        async function showAccountPage(errorField) {
+            document.getElementById('page-title').innerText = "Account";
+            document.getElementById('page-icon').className = 'ph ph-user text-[20px] text-gray-700';
+            const actualCards = document.getElementById('actual-cards-container');
+            const skeletonCards = document.getElementById('skeleton-container');
+
+            actualCards.classList.add('hidden');
+            skeletonCards.classList.remove('hidden');
+
+            const token = localStorage.getItem('token');
+            let user = null;
+            if (token) {
+                try {
+                    const res = await fetch('/users/me', { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (res.ok) user = await res.json();
+                } catch (e) { console.error("Failed to load user profile"); }
+            }
+
+            const highlightField = errorField || '';
+            const tvidHighlight = highlightField === 'tvid' ? 'error-highlight' : '';
+
+            actualCards.innerHTML = `
+                <div class="col-span-full flex flex-col gap-3 max-w-2xl mx-auto w-full">
+                    <!-- Back button -->
+                    <a href="/settings" onclick="navigateTo(event, 'settings')" class="self-start flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-brand transition-colors mb-1">
+                        <i class="ph ph-arrow-left text-lg"></i> Back to Settings
+                    </a>
+
+                    ${!token ? `
+                        <div class="bg-white rounded-[1.75rem] p-8 shadow-card text-center">
+                            <i class="ph ph-user-circle text-5xl text-gray-300 mb-3"></i>
+                            <p class="text-gray-500 font-medium mb-4">Sign in to view your account</p>
+                            <button onclick="goToLogin()" class="px-6 py-2.5 bg-brand text-white font-bold rounded-xl shadow-brand-glow hover:bg-brand-dark transition-all text-sm">Sign In</button>
+                        </div>
+                    ` : `
+                        <!-- Profile Section -->
+                        <div class="bg-white rounded-[1.75rem] p-6 shadow-card">
+                            ${highlightField ? `<div class="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-xl text-sm font-semibold text-red-600"><i class="ph ph-warning-circle text-lg"></i> Please fill in the highlighted field below before purchasing.</div>` : ''}
+                            <div class="flex items-center gap-4 mb-6">
+                                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-[#4facfe] to-[#00f2fe] flex items-center justify-center text-white font-bold text-xl shadow-md">
+                                    ${user && user.UserName ? user.UserName.charAt(0).toUpperCase() : '?'}
+                                </div>
+                                <div>
+                                    <p class="text-lg font-bold text-gray-900">${user ? user.UserName : 'Guest'}</p>
+                                    <p class="text-sm text-gray-500">@${user ? user.UserID : 'guest'}</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Display Name</label>
+                                        <input id="setting-username" type="text" value="${user ? user.UserName : ''}" class="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:bg-white transition-all" placeholder="Your name">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Email</label>
+                                        <input type="text" value="${user ? user.email : ''}" disabled class="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-400 cursor-not-allowed">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">User ID</label>
+                                        <input type="text" value="${user ? user.UserID : ''}" disabled class="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-400 cursor-not-allowed">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">TradingView Username</label>
+                                        <input id="setting-tvid" type="text" value="${user && user.tvid ? user.tvid : ''}" class="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:bg-white transition-all ${tvidHighlight}" placeholder="Required for indicator access">
+                                        ${highlightField === 'tvid' ? '<p class="text-[11px] text-red-500 font-semibold mt-1">This field is required to purchase indicators.</p>' : ''}
+                                    </div>
+                                </div>
+                                <div id="profile-save-status" class="hidden text-sm font-semibold"></div>
+                                <button onclick="saveProfile()" class="self-start px-6 py-2.5 bg-brand text-white font-bold rounded-xl shadow-brand-glow hover:bg-brand-dark transition-all text-sm flex items-center gap-2">
+                                    <i class="ph ph-floppy-disk text-lg"></i> Save Changes
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Change Password Section -->
+                        <div class="bg-white rounded-[1.75rem] p-6 shadow-card">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4">Change Password</h3>
+                            <div class="flex flex-col gap-4">
+                                <div>
+                                    <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Current Password</label>
+                                    <input id="setting-current-password" type="password" class="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:bg-white transition-all" placeholder="Enter current password">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">New Password</label>
+                                    <input id="setting-new-password" type="password" class="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:bg-white transition-all" placeholder="Enter new password">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5 block">Confirm New Password</label>
+                                    <input id="setting-confirm-password" type="password" class="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:bg-white transition-all" placeholder="Re-enter new password">
+                                </div>
+                                <div id="password-save-status" class="hidden text-sm font-semibold"></div>
+                                <button onclick="savePassword()" class="self-start px-6 py-2.5 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-all text-sm flex items-center gap-2">
+                                    <i class="ph ph-lock-key text-lg"></i> Update Password
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Logout Section -->
+                        <button onclick="logout()" class="w-full bg-red-50 rounded-[1.75rem] p-5 flex items-center justify-between hover:bg-red-100 transition-colors text-left">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-500">
+                                    <i class="ph ph-sign-out text-2xl"></i>
+                                </div>
+                                <div>
+                                    <p class="text-[15px] font-bold text-red-600">Log Out</p>
+                                    <p class="text-xs text-red-400 mt-0.5">Sign out of your account</p>
+                                </div>
+                            </div>
+                            <i class="ph ph-caret-right text-xl text-red-300"></i>
+                        </button>
+                    `}
+                </div>
+            `;
+
+            skeletonCards.classList.add('hidden');
+            actualCards.classList.remove('hidden');
+
+            if (highlightField) {
+                history.replaceState(null, '', '/settings/account');
+            }
+        }
+
+        function showPreferencesPage() {
+            document.getElementById('page-title').innerText = "Preferences";
+            document.getElementById('page-icon').className = 'ph ph-sliders-horizontal text-[20px] text-gray-700';
+            const actualCards = document.getElementById('actual-cards-container');
+            const skeletonCards = document.getElementById('skeleton-container');
+
+            actualCards.classList.add('hidden');
+            skeletonCards.classList.remove('hidden');
+
+            actualCards.innerHTML = `
+                <div class="col-span-full flex flex-col gap-3 max-w-2xl mx-auto w-full">
+                    <!-- Back button -->
+                    <a href="/settings" onclick="navigateTo(event, 'settings')" class="self-start flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-brand transition-colors mb-1">
+                        <i class="ph ph-arrow-left text-lg"></i> Back to Settings
+                    </a>
+
+                    <div class="bg-white rounded-[1.75rem] p-6 shadow-card">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Notifications</h3>
+                        <div class="flex flex-col gap-4">
+                            <div class="flex items-center justify-between py-2">
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900">Email Notifications</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Receive updates about your courses and sessions</p>
+                                </div>
+                                <button id="toggle-email-notif" onclick="togglePreference(this, 'email_notif')" class="w-12 h-7 rounded-full bg-brand relative transition-colors duration-200">
+                                    <span class="absolute top-0.5 right-0.5 w-6 h-6 bg-white rounded-full shadow-sm transition-all duration-200"></span>
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between py-2">
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900">Marketing Emails</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">New products, offers, and platform updates</p>
+                                </div>
+                                <button id="toggle-marketing" onclick="togglePreference(this, 'marketing')" class="w-12 h-7 rounded-full bg-gray-200 relative transition-colors duration-200">
+                                    <span class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-sm transition-all duration-200"></span>
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between py-2">
+                                <div>
+                                    <p class="text-sm font-bold text-gray-900">Session Reminders</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Get reminded before live sessions start</p>
+                                </div>
+                                <button id="toggle-reminders" onclick="togglePreference(this, 'reminders')" class="w-12 h-7 rounded-full bg-brand relative transition-colors duration-200">
+                                    <span class="absolute top-0.5 right-0.5 w-6 h-6 bg-white rounded-full shadow-sm transition-all duration-200"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-[1.75rem] p-6 shadow-card">
+                        <h3 class="text-lg font-bold text-gray-900 mb-4">Appearance</h3>
+                        <div class="flex items-center justify-between py-2">
+                            <div>
+                                <p class="text-sm font-bold text-gray-900">Compact Cards</p>
+                                <p class="text-xs text-gray-500 mt-0.5">Show more items per screen</p>
+                            </div>
+                            <button id="toggle-compact" onclick="togglePreference(this, 'compact')" class="w-12 h-7 rounded-full bg-gray-200 relative transition-colors duration-200">
+                                <span class="absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow-sm transition-all duration-200"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            skeletonCards.classList.add('hidden');
+            actualCards.classList.remove('hidden');
+        }
+
+        function togglePreference(btn, key) {
+            const isOn = btn.classList.contains('bg-brand');
+            const knob = btn.querySelector('span');
+            if (isOn) {
+                btn.classList.remove('bg-brand');
+                btn.classList.add('bg-gray-200');
+                knob.classList.remove('right-0.5');
+                knob.classList.add('left-0.5');
+            } else {
+                btn.classList.remove('bg-gray-200');
+                btn.classList.add('bg-brand');
+                knob.classList.remove('left-0.5');
+                knob.classList.add('right-0.5');
+            }
+            localStorage.setItem('pref_' + key, !isOn);
+        }
+
+        // --- TOAST NOTIFICATION SYSTEM ---
+        function showToast(message, type = 'success', duration = 4000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            const icon = type === 'success'
+                ? '<i class="ph ph-check-circle text-xl"></i>'
+                : '<i class="ph ph-warning-circle text-xl"></i>';
+            toast.innerHTML = `
+                <span class="toast-icon">${icon}</span>
+                <span class="toast-msg">${message}</span>
+                <button class="toast-close" onclick="this.parentElement.classList.add('hide'); setTimeout(() => this.parentElement.remove(), 300);">
+                    <i class="ph ph-x text-sm"></i>
+                </button>
+            `;
+            container.appendChild(toast);
+            requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('show')));
+            setTimeout(() => {
+                toast.classList.add('hide');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+
+        async function saveProfile() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const username = document.getElementById('setting-username').value.trim();
+            const tvid = document.getElementById('setting-tvid').value.trim();
+            const statusEl = document.getElementById('profile-save-status');
+
+            try {
+                const response = await fetch('/users/me', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ UserName: username, tvid: tvid })
+                });
+
+                if (response.ok) {
+                    statusEl.innerText = 'Profile saved successfully!';
+                    statusEl.className = 'text-sm font-semibold text-green-600';
+                    statusEl.classList.remove('hidden');
+                    const nameDisplay = document.getElementById('auth-display-name');
+                    if (nameDisplay) nameDisplay.innerText = username;
+                    setTimeout(() => statusEl.classList.add('hidden'), 3000);
+                } else {
+                    const data = await response.json();
+                    statusEl.innerText = data.detail || 'Failed to save profile.';
+                    statusEl.className = 'text-sm font-semibold text-red-500';
+                    statusEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                statusEl.innerText = 'Network error. Please try again.';
+                statusEl.className = 'text-sm font-semibold text-red-500';
+                statusEl.classList.remove('hidden');
+            }
+        }
+
+        async function savePassword() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const current = document.getElementById('setting-current-password').value;
+            const newPass = document.getElementById('setting-new-password').value;
+            const confirm = document.getElementById('setting-confirm-password').value;
+            const statusEl = document.getElementById('password-save-status');
+
+            if (!current || !newPass || !confirm) {
+                statusEl.innerText = 'Please fill in all fields.';
+                statusEl.className = 'text-sm font-semibold text-red-500';
+                statusEl.classList.remove('hidden');
+                return;
+            }
+            if (newPass !== confirm) {
+                statusEl.innerText = 'New passwords do not match.';
+                statusEl.className = 'text-sm font-semibold text-red-500';
+                statusEl.classList.remove('hidden');
+                return;
+            }
+            if (newPass.length < 6) {
+                statusEl.innerText = 'Password must be at least 6 characters.';
+                statusEl.className = 'text-sm font-semibold text-red-500';
+                statusEl.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const response = await fetch('/users/me/password', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ current_password: current, new_password: newPass })
+                });
+
+                if (response.ok) {
+                    document.getElementById('setting-current-password').value = '';
+                    document.getElementById('setting-new-password').value = '';
+                    document.getElementById('setting-confirm-password').value = '';
+                    statusEl.innerText = 'Password updated successfully!';
+                    statusEl.className = 'text-sm font-semibold text-green-600';
+                    statusEl.classList.remove('hidden');
+                    setTimeout(() => statusEl.classList.add('hidden'), 3000);
+                } else {
+                    const data = await response.json();
+                    statusEl.innerText = data.detail || 'Failed to update password.';
+                    statusEl.className = 'text-sm font-semibold text-red-500';
+                    statusEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                statusEl.innerText = 'Network error. Please try again.';
+                statusEl.className = 'text-sm font-semibold text-red-500';
+                statusEl.classList.remove('hidden');
+            }
+        }
+
+async function processCheckout(btnElement) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        goToLogin();
+        return;
+    }
+
+    if (cartState.length === 0) return;
+
+    const allCheckoutBtns = document.querySelectorAll('.checkout-btn');
+    allCheckoutBtns.forEach(btn => {
+        btn.innerText = "Processing...";
+        btn.disabled = true;
+    });
+
+    let purchaseCount = 0;
+    let failedItems = [];
+
+    try {
+        for (const item of cartState) {
+            const response = await fetch('/purchase', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({ 
+                    product_section: parseInt(item.product_section),
+                    product_uuid: item.id, 
+                    cost: item.price 
+                })
+            });
+            if (response.ok) {
+                if (item.product_section == 1) {
+                    purchasedCourseIds.push(item.id);
+                } else if (item.product_section == 2) {
+                    purchasedIndicatorIds.push(item.id);
+                } else if (item.product_section == 3) {
+                    purchasedBotIds.push(item.id);
+                }
+                purchaseCount++;
+            } else {
+                const errData = await response.json().catch(() => ({}));
+                const errMsg = errData.detail || 'Purchase failed';
+                if (errMsg.toLowerCase().includes('tvid')) {
+                    showToast('TradingView Username is required. Redirecting to settings...', 'error', 4000);
+                    cartState = [];
+                    saveCart();
+                    renderCart();
+                    allCheckoutBtns.forEach(btn => {
+                        btn.innerHTML = `<i class="ph ph-credit-card text-lg"></i> Checkout`;
+                        btn.disabled = false;
+                    });
+                    history.pushState({}, '', '/settings/account?error=tvid');
+                    loadSection('settings', 'account', 'tvid');
+                    return;
+                }
+                failedItems.push(item.title);
+            }
+        }
+        
+        if (purchaseCount > 0 && failedItems.length === 0) {
+            showToast(`Purchase successful! You bought ${purchaseCount} item${purchaseCount > 1 ? 's' : ''}.`, 'success', 4000);
+        } else if (purchaseCount > 0 && failedItems.length > 0) {
+            showToast(`Partial success: ${purchaseCount} purchased, ${failedItems.length} failed.`, 'error', 5000);
+        } else {
+            showToast('Purchase failed. Please try again.', 'error', 4000);
+        }
+
+        cartState = [];
+        saveCart();
+        renderCart();
+        renderLibrary();
+        
+        const isIndicatorsTab = document.querySelector('.nav-item.active').innerText.includes("Indicators");
+        const isAlertsTab = document.querySelector('.nav-item.active').innerText.includes("Alerts");
+        if (isIndicatorsTab) {
+            fetchIndicators();
+        } else if (isAlertsTab) {
+            fetchBots();
+        } else {
+            fetchCourses();
+        }
+
+        // Refresh product view if it's open
+        if (currentProduct && currentProduct.isPurchased === false) {
+            currentProduct.isPurchased = true;
+            if (currentProduct.productSection === 1) {
+                purchasedCourseIds.push(parseInt(currentProduct.id));
+            } else if (currentProduct.productSection === 2) {
+                purchasedIndicatorIds.push(parseInt(currentProduct.id));
+            } else if (currentProduct.productSection === 3) {
+                purchasedBotIds.push(parseInt(currentProduct.id));
+            }
+            openProductPage(currentProduct);
+        }
+        
+        const targetTab = document.querySelector(`#cart-modal-content .tab-library`);
+        if (targetTab) switchSlide('library', targetTab);
+
+    } catch (err) {
+        showToast('Network error. Is the server running?', 'error', 4000);
+    } finally {
+        allCheckoutBtns.forEach(btn => {
+            btn.innerHTML = `<i class="ph ph-credit-card text-lg"></i> Checkout`;
+            btn.disabled = false;
+        });
+                }
+                // Update FAB button
+                updateFabButton(enrollmentStatus);
+            }
+
+
+        // Live Countdown Math
+        function forceTimerUpdate() {
+            document.querySelectorAll('.countdown-wrapper').forEach(wrapper => {
+                let dateStr = wrapper.dataset.scheduled;
+                const isOngoing = wrapper.dataset.ongoing === 'true';
+
+                if (!dateStr || dateStr === 'null' || dateStr === 'undefined') {
+                    wrapper.querySelector('.timer-text').innerText = 'Not scheduled';
+                    return;
+                }
+
+                const timerText = wrapper.querySelector('.timer-text');
+                const icon = wrapper.querySelector('i');
+                const card = wrapper.closest('.nft-card');
+                const actionBtn = card ? card.querySelector('.join-btn') : null;
+
+                if (isOngoing) {
+                    timerText.innerText = "Live Now!";
+                    timerText.classList.remove('text-brand', 'text-gray-500');
+                    timerText.classList.add('text-green-600');
+                    if (icon) icon.className = "ph ph-clock text-green-600 font-bold";
+                    if (actionBtn && actionBtn.classList.contains('cursor-not-allowed')) {
+                        actionBtn.className = "cart-btn added ml-2 join-btn bg-green-500 border-green-500 hover:bg-green-600 cursor-pointer shadow-md transition-all";
+                        actionBtn.innerHTML = `<i class="ph ph-play-circle text-xl text-white"></i>`;
+                        actionBtn.onclick = (e) => {
+                            e.stopPropagation(); 
+                            window.open(actionBtn.dataset.link, '_blank');
+                        };
+                    }
+                    return;
+                }
+
+                const scheduledTime = new Date(dateStr).getTime();
+                if (isNaN(scheduledTime)) {
+                    timerText.innerText = 'Invalid date';
+                    return;
+                }
+                const durationStr = wrapper.dataset.duration || "2 hours";
+                
+                let durationMs = 2 * 60 * 60 * 1000; 
+                const match = durationStr.match(/([\d.]+)/); 
+                if (match) {
+                    const val = parseFloat(match[1]);
+                    if (durationStr.toLowerCase().includes('min')) {
+                        durationMs = val * 60 * 1000; 
+                    } else {
+                        durationMs = val * 60 * 60 * 1000; 
+                    }
+                }
+
+                const endTime = scheduledTime + durationMs;
+                const now = new Date().getTime();
+
+                if (now >= scheduledTime && now <= endTime) {
+                    timerText.innerText = "Live Now!";
+                    timerText.classList.remove('text-brand', 'text-gray-500');
+                    timerText.classList.add('text-green-600');
+                    if (icon) icon.className = "ph ph-clock text-green-600 font-bold";
+
+                    if (actionBtn && actionBtn.classList.contains('cursor-not-allowed')) {
+                        actionBtn.className = "cart-btn added ml-2 join-btn bg-green-500 border-green-500 hover:bg-green-600 cursor-pointer shadow-md transition-all";
+                        actionBtn.innerHTML = `<i class="ph ph-play-circle text-xl text-white"></i>`;
+                        actionBtn.onclick = (e) => {
+                            e.stopPropagation(); 
+                            window.open(actionBtn.dataset.link, '_blank');
+                        };
+                    }
+                } else if (now > endTime) {
+                    timerText.innerText = "Not yet scheduled";
+                    timerText.classList.remove('text-brand', 'text-green-600');
+                    timerText.classList.add('text-gray-500');
+                    if (icon) icon.className = "ph ph-calendar-blank text-gray-500 font-bold";
+                    
+                    if (actionBtn) {
+                        actionBtn.className = "cart-btn ml-2 join-btn opacity-40 bg-gray-200 cursor-not-allowed pointer-events-none";
+                        actionBtn.innerHTML = `<i class="ph ph-play-circle text-xl text-gray-600"></i>`;
+                        actionBtn.onclick = null; 
+                    }
+                } else {
+                    const diff = scheduledTime - now;
+                    const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+                    const h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    const s = Math.floor((diff % (1000 * 60)) / 1000);
+                    
+                    timerText.classList.remove('text-green-600', 'text-gray-500');
+                    timerText.classList.add('text-brand');
+                    if (icon) icon.className = "ph ph-clock text-brand font-bold";
+
+                    if (d > 0) timerText.innerText = `Starts in ${d}d ${h}h`;
+                    else timerText.innerText = `Starts in ${h}h ${m}m ${s}s`;
+                }
+            });
+        }
+        
+        function startCountdownTimer() {
+            setInterval(forceTimerUpdate, 1000);
+        }
+// Cart Utility Functions
+function toggleCart(button, event, id, title, price, image, itemType, productSection) {
+    event.stopPropagation(); 
+    // Check both ID and section to prevent conflicts
+    const existingIndex = cartState.findIndex(item => item.id == id && item.product_section == productSection);
+
+    if (existingIndex > -1) {
+        cartState.splice(existingIndex, 1);
+        button.classList.remove('added');
+    } else {
+        // Now storing type and product_section in the cart state
+        cartState.push({ id, title, price, image, type: itemType, product_section: productSection });
+        button.classList.add('added');
+    }
+    saveCart(); 
+    button.style.transform = 'scale(0.8)';
+    setTimeout(() => { button.style.transform = 'scale(1)'; }, 150);
+    renderCart();
+}
+
+function removeFromCart(id, productSection) {
+    // Filter out the exact item type
+    cartState = cartState.filter(item => !(item.id == id && item.product_section == productSection));
+    saveCart(); 
+    const relatedCard = document.querySelector(`.nft-card[data-id="${id}"]`);
+    if (relatedCard) {
+        const cartBtn = relatedCard.querySelector('.add-to-cart-btn');
+        if (cartBtn) cartBtn.classList.remove('added');
+    }
+    renderCart();
+}
+
+
+function renderCart() {
+    const containers = document.querySelectorAll('.cart-items-container');
+    const totalElements = document.querySelectorAll('.cart-total');
+    const tabElements = document.querySelectorAll('.tab-cart');
+    const headerBadge = document.getElementById('header-cart-badge');
+
+    tabElements.forEach(el => el.innerText = `Cart (${cartState.length})`);
+
+    if (cartState.length > 0) {
+        headerBadge.innerText = cartState.length;
+        headerBadge.classList.remove('hidden');
+    } else {
+        headerBadge.classList.add('hidden');
+    }
+
+    let htmlString = '';
+    let currentTotal = 0;
+
+    if (cartState.length === 0) {
+        htmlString = `
+            <div class="flex flex-col items-center justify-center text-center h-full py-10 opacity-60">
+                <i class="ph ph-shopping-cart text-4xl mb-2 text-gray-400"></i>
+                <p class="text-sm font-medium text-gray-500">Your cart is empty.</p>
+            </div>`;
+    } else {
+        cartState.forEach(item => {
+            currentTotal += item.price;
+            htmlString += `
+                <div class="flex items-center justify-between p-3.5 bg-[#F8F9FB] border border-gray-100 rounded-2xl group transition-all hover:border-gray-200">
+                    <div class="flex items-center gap-3.5">
+                        <img src="${item.image}" class="w-[42px] h-[42px] rounded-xl object-cover shadow-sm">
+                        <div>
+                            <!-- ADDED: The visual label (Course or Indicator) -->
+                            <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">${item.type}</p>
+                            <h4 class="text-[14px] font-bold text-gray-900 leading-tight">${item.title}</h4>
+                            <p class="text-[12px] font-bold text-brand mt-0.5">$${item.price.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <!-- ADDED: Pass product_section into removeFromCart -->
+                    <button onclick="removeFromCart('${item.id}', ${item.product_section})" class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-red-500 transition-colors shadow-sm">
+                        <i class="ph ph-trash text-lg"></i>
+                    </button>
+                </div>
+            `;
+        });
+    }
+
+    containers.forEach(container => container.innerHTML = htmlString);
+    totalElements.forEach(el => el.innerText = `$${currentTotal.toFixed(2)}`);
+}
+
+        // --- LIBRARY LOGIC ---
+        async function renderLibrary() {
+            const token = localStorage.getItem('token');
+            const contents = document.querySelectorAll('.lib-content');
+            const emptyMsgs = document.querySelectorAll('.lib-empty-msg');
+
+            if (!token) {
+                contents.forEach(c => c.innerHTML = '<p class="text-sm text-gray-400 mt-4 text-center lib-empty-msg">Sign in to see your library.</p>');
+                return;
+            }
+
+            try {
+                const response = await fetch('/my-library', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!response.ok) throw new Error('Failed to load library');
+                const data = await response.json();
+
+                // Build course HTML
+                let coursesHtml = '';
+                if (data.courses && data.courses.length > 0) {
+                    data.courses.forEach(course => {
+                        const timerHtml = course.scheduled_at
+                            ? `<div class="countdown-wrapper flex items-center gap-1 text-brand" data-scheduled="${course.scheduled_at}" data-duration="${course.estimated_duration || '2 hours'}" data-ongoing="${course.is_ongoing || false}">
+                                 <i class="ph ph-clock font-bold text-xs"></i>
+                                 <span class="timer-text text-xs font-bold">Calculating...</span>
+                               </div>`
+                            : `<div class="text-xs font-bold text-gray-400">Not scheduled</div>`;
+                        coursesHtml += `
+                            <div class="flex items-center justify-between p-3 bg-[#F8F9FB] border border-gray-100 rounded-2xl hover:border-gray-200 transition-all">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <img src="${course.thumbnail || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-lg object-cover shadow-sm shrink-0">
+                                    <div class="min-w-0">
+                                        <p class="text-[13px] font-bold text-gray-900 truncate">${course.title}</p>
+                                        <p class="text-[11px] text-gray-500 truncate">${course.description || 'No description'}</p>
+                                    </div>
+                                </div>
+                                ${timerHtml}
+                            </div>
+                        `;
+                    });
+                } else {
+                    coursesHtml = '<p class="text-sm text-gray-400 mt-4 text-center">No purchased courses yet.</p>';
+                }
+
+                // Build indicator HTML
+                let indicatorsHtml = '';
+                if (data.indicators && data.indicators.length > 0) {
+                    data.indicators.forEach(ind => {
+                        indicatorsHtml += `
+                            <div class="flex items-center justify-between p-3 bg-[#F8F9FB] border border-gray-100 rounded-2xl hover:border-gray-200 transition-all">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <img src="${ind.thumbnail || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-lg object-cover shadow-sm shrink-0">
+                                    <div class="min-w-0">
+                                        <p class="text-[13px] font-bold text-gray-900 truncate">${ind.name}</p>
+                                        <p class="text-[11px] text-gray-500 truncate">${ind.description || 'No description'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    indicatorsHtml = '<p class="text-sm text-gray-400 mt-4 text-center">No purchased indicators yet.</p>';
+                }
+
+                // Build bot HTML
+                let botsHtml = '';
+                if (data.bots && data.bots.length > 0) {
+                    data.bots.forEach(bot => {
+                        botsHtml += `
+                            <div class="flex items-center justify-between p-3 bg-[#F8F9FB] border border-gray-100 rounded-2xl hover:border-gray-200 transition-all">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <img src="${bot.thumbnail || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-lg object-cover shadow-sm shrink-0">
+                                    <div class="min-w-0">
+                                        <p class="text-[13px] font-bold text-gray-900 truncate">${bot.name}</p>
+                                        <p class="text-[11px] text-gray-500 truncate">${bot.description || 'No description'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    botsHtml = '<p class="text-sm text-gray-400 mt-4 text-center">No purchased alert bots yet.</p>';
+                }
+
+                // Store HTML in data attributes on each .lib-content container
+                contents.forEach(container => {
+                    container.dataset.courses = coursesHtml;
+                    container.dataset.indicators = indicatorsHtml;
+                    container.dataset.bots = botsHtml;
+                });
+
+                // Show currently active tab content
+                const activeTab = document.querySelector('.lib-tab-courses.text-brand') ? 'courses'
+                                : document.querySelector('.lib-tab-indicators.text-brand') ? 'indicators'
+                                : 'bots';
+                contents.forEach(container => {
+                    container.innerHTML = container.dataset[activeTab];
+                });
+
+                forceTimerUpdate();
+            } catch (err) {
+                contents.forEach(c => c.innerHTML = '<p class="text-sm text-red-400 mt-4 text-center">Failed to load library.</p>');
+            }
+        }
+
+        function switchLibTab(tab, btnElement) {
+            const container = btnElement.closest('.slider-track') || btnElement.closest('.cart-widget-container');
+            if (!container) return;
+
+            const allTabs = container.querySelectorAll('[class*="lib-tab-"]');
+            allTabs.forEach(t => {
+                t.classList.remove('text-brand', 'border-brand');
+                t.classList.add('text-gray-400', 'border-transparent');
+            });
+            btnElement.classList.remove('text-gray-400', 'border-transparent');
+            btnElement.classList.add('text-brand', 'border-brand');
+
+            const contents = container.querySelectorAll('.lib-content');
+            contents.forEach(c => {
+                c.innerHTML = c.dataset[tab] || '<p class="text-sm text-gray-400 mt-4 text-center">No items.</p>';
+            });
+
+            forceTimerUpdate();
+        }
+
+        // View Toggles and Animations
+        function selectNav(element, event) {
+            if (event) event.preventDefault();
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.classList.remove('text-white', 'active');
+                item.classList.add('text-gray-500', 'hover:bg-gray-50', 'hover:text-gray-900');
+            });
+            element.classList.remove('text-gray-500', 'hover:bg-gray-50', 'hover:text-gray-900');
+            element.classList.add('text-white', 'active');
+
+            const indicator = document.getElementById('nav-indicator');
+            if (indicator) {
+                indicator.style.top = element.offsetTop + 'px';
+                indicator.style.height = element.offsetHeight + 'px';
+            }
+        }
+
+        function toggleLike(button, event) {
+            event.stopPropagation();
+            button.classList.toggle('active');
+            button.style.transform = 'scale(0.9)';
+            setTimeout(() => { button.style.transform = 'scale(1)'; }, 100);
+        }
+
+        function switchSlide(slide, btnElement) {
+            const container = btnElement.closest('.cart-widget-container');
+            const track = container.querySelector('.slider-track');
+            const tabLibrary = container.querySelector('.tab-library');
+            const tabCart = container.querySelector('.tab-cart');
+
+            if (slide === 'library') {
+                track.style.transform = 'translateX(0)';
+                tabLibrary.classList.remove('text-gray-400', 'border-transparent');
+                tabLibrary.classList.add('text-gray-900', 'border-brand');
+                tabCart.classList.remove('text-gray-900', 'border-brand');
+                tabCart.classList.add('text-gray-400', 'border-transparent');
+            } else if (slide === 'cart') {
+                track.style.transform = 'translateX(-50%)';
+                tabCart.classList.remove('text-gray-400', 'border-transparent');
+                tabCart.classList.add('text-gray-900', 'border-brand');
+                tabLibrary.classList.remove('text-gray-900', 'border-brand');
+                tabLibrary.classList.add('text-gray-400', 'border-transparent');
+            }
+        }
+
+        function openModal() {
+            const overlay = document.getElementById('cart-modal-overlay');
+            const content = document.getElementById('cart-modal-content');
+            overlay.classList.remove('hidden');
+            void overlay.offsetWidth; 
+            overlay.classList.remove('opacity-0');
+            overlay.classList.add('opacity-100');
+            content.classList.remove('scale-95');
+            content.classList.add('scale-100');
+            const targetTab = cartState.length > 0 ? 'cart' : 'library';
+            switchSlide(targetTab, document.querySelector(`#cart-modal-content .tab-${targetTab}`));
+        }
+
+        function closeModal() {
+            const overlay = document.getElementById('cart-modal-overlay');
+            const content = document.getElementById('cart-modal-content');
+            overlay.classList.remove('opacity-100');
+            overlay.classList.add('opacity-0');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => { overlay.classList.add('hidden'); }, 300);
+        }
+
+        function closeModalOnOverlay(event) {
+            if (event.target === event.currentTarget) closeModal();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const productOverlay = document.getElementById('product-modal-overlay');
+                if (productOverlay && !productOverlay.classList.contains('hidden')) {
+                    closeProductPage();
+                }
+                const cartOverlay = document.getElementById('cart-modal-overlay');
+                if (cartOverlay && !cartOverlay.classList.contains('hidden')) {
+                    closeModal();
+                }
+            }
+        });
+    </script>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-40 flex md:hidden justify-around items-center h-[72px]">
+        <a href="/courses" class="mobile-nav-item flex flex-col items-center justify-center gap-1 w-full h-full text-brand active" onclick="navigateTo(event, 'courses')">
+            <i class="ph ph-graduation-cap text-2xl"></i>
+            <span class="text-[10px] font-semibold">Courses</span>
+        </a>
+        <a href="/indicators" class="mobile-nav-item flex flex-col items-center justify-center gap-1 w-full h-full text-gray-400" onclick="navigateTo(event, 'indicators')">
+            <i class="ph ph-chart-line-up text-2xl"></i>
+            <span class="text-[10px] font-semibold">Indicators</span>
+        </a>
+        <a href="/alerts" class="mobile-nav-item flex flex-col items-center justify-center gap-1 w-full h-full text-gray-400" onclick="navigateTo(event, 'alerts')">
+            <i class="ph ph-bell-ringing text-2xl"></i>
+            <span class="text-[10px] font-semibold">Alerts</span>
+        </a>
+        <a href="/settings" class="mobile-nav-item flex flex-col items-center justify-center gap-1 w-full h-full text-gray-400" onclick="navigateTo(event, 'settings')">
+            <i class="ph ph-gear text-2xl"></i>
+            <span class="text-[10px] font-semibold">Settings</span>
+        </a>
+    </nav>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
+
+    <style>
+        .toast {
+            pointer-events: auto;
+            min-width: 300px;
+            max-width: 420px;
+            padding: 14px 18px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+            transform: translateX(120%);
+            transition: transform 0.35s cubic-bezier(0.21,1.02,0.73,1), opacity 0.3s ease;
+            opacity: 0;
+        }
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .toast.hide {
+            transform: translateX(120%);
+            opacity: 0;
+        }
+        .toast-success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #166534;
+        }
+        .toast-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+        .toast-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 16px;
+        }
+        .toast-success .toast-icon { background: #dcfce7; color: #16a34a; }
+        .toast-error .toast-icon { background: #fee2e2; color: #dc2626; }
+        .toast-msg { flex: 1; line-height: 1.4; }
+        .toast-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 8px;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            flex-shrink: 0;
+        }
+        .toast-close:hover { opacity: 1; }
+        .error-highlight {
+            border: 2px solid #ef4444 !important;
+            box-shadow: 0 0 0 3px rgba(239,68,68,0.15) !important;
+            animation: pulse-red 2s ease-in-out 3;
+        }
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 3px rgba(239,68,68,0.15); }
+            50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.08); }
+        }
+    </style>
+</body>
+</html>

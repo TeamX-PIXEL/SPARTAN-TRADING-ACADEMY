@@ -1,0 +1,293 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import {
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState,
+} from "@tanstack/react-table";
+import { ArrowDownWideNarrow, Plus } from "lucide-react";
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { columns } from "./courses-columns";
+import type { CourseRow } from "./courses-schema";
+
+export function AcademyTable({ data }: { data: CourseRow[] }) {
+  const router = useRouter();
+  const [sorting, setSorting] = React.useState<SortingState>([]);
+  
+  // Dialog State
+  const [isAddOpen, setIsAddOpen] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+
+  // Form State
+  const [courseId, setCourseId] = React.useState("");
+  const [title, setTitle] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [price, setPrice] = React.useState("0");
+  const [thumbnail, setThumbnail] = React.useState("");
+
+  // Validation State
+  const [idStatus, setIdStatus] = React.useState<"idle" | "checking" | "available" | "taken">("idle");
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  const handleSortChange = (value: string) => {
+    if (value === "purchased") {
+      setSorting([{ id: "purchasedCount", desc: true }]);
+    } else if (value === "price-desc") {
+      setSorting([{ id: "price", desc: true }]);
+    } else {
+      setSorting([]); 
+    }
+  };
+
+  // Real-time ID Validation logic (Debounced)
+  React.useEffect(() => {
+    if (!courseId) {
+      setIdStatus("idle");
+      return;
+    }
+
+    setIdStatus("checking");
+    
+    // Wait 500ms after the user stops typing to ping the API
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/courses/check-id/${courseId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setIdStatus(data.exists ? "taken" : "available");
+        }
+      } catch (error) {
+        console.error("Error validating Course ID", error);
+        setIdStatus("idle");
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [courseId]);
+
+  async function handleAddCourse() {
+    if (!title || !courseId) return alert("Course ID and Title are required.");
+    setIsSubmitting(true);
+    
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/courses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          course_id: courseId, // Sending the custom ID
+          title: title,
+          description: description,
+          price: parseFloat(price),
+          course_thumbnail: thumbnail || "default.jpg",
+        }),
+      });
+
+      if (res.ok) {
+        setIsAddOpen(false);
+        setCourseId("");
+        setTitle("");
+        setDescription("");
+        setPrice("0");
+        setThumbnail("");
+        setIdStatus("idle");
+        router.refresh();
+      } else {
+        console.error("Failed to add course");
+      }
+    } catch (error) {
+      console.error("Error creating course:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-4 gap-2">
+        <div className="flex flex-col space-y-1.5 overflow-hidden">
+          <CardTitle className="truncate">Academy Courses</CardTitle>
+          <CardDescription className="truncate hidden sm:block">
+            Manage your curriculum, pricing, and enrollments.
+          </CardDescription>
+        </div>
+        
+        <div className="flex items-center gap-2 shrink-0">
+          <Select defaultValue="recent" onValueChange={handleSortChange}>
+            <SelectTrigger className="w-[140px] sm:w-[180px] h-8">
+              <div className="flex items-center gap-2 text-muted-foreground overflow-hidden">
+                <ArrowDownWideNarrow className="size-4 shrink-0" />
+                <span className="text-foreground truncate">
+                  <SelectValue placeholder="Sort courses" />
+                </span>
+              </div>
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="recent">Recently Added</SelectItem>
+              <SelectItem value="purchased">Most Purchased</SelectItem>
+              <SelectItem value="price-desc">Price: High to Low</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button size="icon" className="size-8 shrink-0" onClick={() => setIsAddOpen(true)}>
+            <Plus className="size-4" />
+            <span className="sr-only">Add Course</span>
+          </Button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader className="bg-muted/50">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center">
+                    No results.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        
+        <div className="flex items-center justify-end space-x-2 py-4">
+          <Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+            Previous
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+            Next
+          </Button>
+        </div>
+      </CardContent>
+
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Course</DialogTitle>
+            <DialogDescription>
+              Create a new course for the academy. You can add batches to it later.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            
+            {/* Custom Course ID Input with Validation */}
+            <div className="space-y-2">
+              <Label htmlFor="add-id">Custom Course ID</Label>
+              <Input 
+                id="add-id" 
+                value={courseId}
+                onChange={(e) => setCourseId(e.target.value.toUpperCase().replace(/\s+/g, '-'))} 
+                placeholder="e.g. SOC-101"
+              />
+              {/* Validation Messages */}
+              {idStatus === "checking" && <p className="text-[10px] text-muted-foreground">Checking availability...</p>}
+              {idStatus === "taken" && <p className="text-[10px] text-destructive font-medium">This Course ID is already taken. Please choose another.</p>}
+              {idStatus === "available" && <p className="text-[10px] text-green-500 font-medium">Course ID is available!</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="add-title">Course Title</Label>
+              <Input 
+                id="add-title" 
+                value={title}
+                onChange={(e) => setTitle(e.target.value)} 
+                placeholder="e.g. Threat Hunting 101"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="add-desc">Description</Label>
+              <Textarea 
+                id="add-desc" 
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="resize-none"
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="add-price">Price (USD)</Label>
+                <Input id="add-price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="add-thumb">Thumbnail URL</Label>
+                <Input id="add-thumb" value={thumbnail} onChange={(e) => setThumbnail(e.target.value)} placeholder="https://..." />
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            {/* Button is disabled if validation fails or is currently checking */}
+            <Button 
+              type="button" 
+              onClick={handleAddCourse} 
+              disabled={isSubmitting || idStatus === "taken" || idStatus === "checking" || !courseId || !title}
+            >
+              {isSubmitting ? "Creating..." : "Create Course"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}

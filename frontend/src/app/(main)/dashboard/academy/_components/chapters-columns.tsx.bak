@@ -1,0 +1,90 @@
+"use client";
+"use no memo"; 
+
+import { useSortable } from "@dnd-kit/sortable";
+import type { ColumnDef } from "@tanstack/react-table";
+import { GripVerticalIcon, EllipsisVertical, Edit, Trash } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+// 1. Added the day property to the type
+export type ChapterRow = {
+  id: string;
+  name: string;
+  day: number; 
+};
+
+export function DragHandle({ id }: { id: string }) {
+  const { attributes, listeners, setNodeRef } = useSortable({ id });
+
+  return (
+    <Button
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      variant="ghost"
+      size="icon"
+      className="size-7 cursor-grab text-muted-foreground hover:bg-transparent active:cursor-grabbing"
+      style={{ touchAction: "none" }}
+    >
+      <GripVerticalIcon className="size-4" />
+      <span className="sr-only">Drag to reorder</span>
+    </Button>
+  );
+}
+
+export const chapterColumns: ColumnDef<ChapterRow>[] = [
+  {
+    id: "drag",
+    header: () => null,
+    cell: ({ row }) => <DragHandle id={row.original.id} />,
+    enableSorting: false,
+    enableHiding: false,
+  },
+  {
+    id: "index",
+    header: "Chapter",
+    cell: ({ row }) => <span className="font-medium text-muted-foreground">{row.index + 1}</span>,
+  },
+  {
+    accessorKey: "name",
+    header: "Chapter Name",
+    cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+  },
+  // 2. The new Day column
+  {
+    accessorKey: "day",
+    header: "Day",
+    cell: ({ row }) => <span className="text-muted-foreground">{row.original.day}</span>,
+  },
+  {
+    id: "actions",
+    cell: () => (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="size-8 text-muted-foreground">
+            <EllipsisVertical className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem>
+            <Edit className="mr-2 size-4" />
+            Edit Name
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-destructive">
+            <Trash className="mr-2 size-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ),
+  },
+];
