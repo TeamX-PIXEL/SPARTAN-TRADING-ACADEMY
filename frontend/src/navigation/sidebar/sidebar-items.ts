@@ -5,6 +5,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Settings,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,6 +58,11 @@ export const sidebarItems: NavGroup[] = [
         title: "Alert Bots",
         url: "/dashboard/botalerts",
         icon: Bot,
+      },
+      {
+        title: "Clients Manage",
+        url: "/dashboard/clients",
+        icon: Users,
       },
       {
         title: "Finance",

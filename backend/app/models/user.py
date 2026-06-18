@@ -14,6 +14,11 @@ class User(Base):
     email = Column(String(255), unique=True, index=True)
     password = Column("password_hash", String(255))
     tvid = Column(String(255), nullable=True)
+    phone_number = Column(String(255), nullable=True)
+    telegram_user_id = Column(String(255), nullable=True)
+    telegram_chat_id = Column(String(255), nullable=True)
+    discord_user_id = Column(String(255), nullable=True)
+    discord_chat_id = Column(String(255), nullable=True)
     last_login = Column(DateTime, nullable=True)
 
     is_verified = Column(Boolean, default=False)

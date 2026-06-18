@@ -33,6 +33,11 @@ def get_all_users(db: Session = Depends(get_db), current_admin=Depends(get_curre
             "UserName": u.UserName,
             "email": u.email,
             "tvid": u.tvid,
+            "phone_number": u.phone_number,
+            "telegram_user_id": u.telegram_user_id,
+            "telegram_chat_id": u.telegram_chat_id,
+            "discord_user_id": u.discord_user_id,
+            "discord_chat_id": u.discord_chat_id,
             "is_verified": u.is_verified,
             "created_at": u.created_at,
         }

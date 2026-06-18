@@ -46,6 +46,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <div className="mx-2 border-b border-border" />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={sidebarItems} />

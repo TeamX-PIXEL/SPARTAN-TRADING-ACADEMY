@@ -61,6 +61,8 @@ This document tracks all UI changes made to the admin portal and maps frontend p
 | `/dashboard/indicators` | `app/(main)/dashboard/indicators/page.tsx` | Working | Partial |
 | `/dashboard/botalerts` | `app/(main)/dashboard/botalerts/page.tsx` | Working | YES |
 | `/dashboard/bots` | `app/(main)/dashboard/bots/page.tsx` | Working | YES |
+| `/dashboard/clients` | `app/(main)/dashboard/clients/page.tsx` | Working | YES (`/api/admin/users`) |
+| `/dashboard/settings` | `app/(main)/dashboard/settings/page.tsx` | Working | Partial |
 | `/dashboard/batches` | `app/(main)/dashboard/batches/page.tsx` | Mock Only | NO |
 
 ---
@@ -127,6 +129,7 @@ This document tracks all UI changes made to the admin portal and maps frontend p
 ### 3.8 Users
 | Method | Endpoint | Request | Response | Status |
 |--------|----------|---------|----------|--------|
+| GET | `/api/admin/users` | - | `[{ id, UserUUID, UserID, UserName, email, tvid, is_verified, created_at }]` | ACTIVE |
 | GET | `/users/search?q={query}` | - | `[{ id, email, name, ... }]` | ACTIVE |
 
 ### 3.9 DELETED Endpoints (CRM - Verify Backend)
@@ -216,5 +219,18 @@ app.include_router(indicators_router, prefix="/api")
 
 ---
 
-*Last Updated: 2026-06-16*
+### Sidebar Navigation (continued)
+- **ADDED**: "Clients Manage" with `Users` icon at `/dashboard/clients`
+  - **Reason**: Dedicated page for managing all registered clients
+  - **File**: `src/navigation/sidebar/sidebar-items.ts`
+  - **Status**: DONE
+
+- **ADDED**: "Settings" with `Settings` icon at `/dashboard/settings`
+  - **Reason**: General and landing page settings management
+  - **File**: `src/navigation/sidebar/sidebar-items.ts`
+  - **Status**: DONE
+
+---
+
+*Last Updated: 2026-06-18*
 *Status: UI Changes Complete, Backend Pipeline Pending*
