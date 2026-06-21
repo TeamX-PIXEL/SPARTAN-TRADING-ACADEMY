@@ -203,10 +203,11 @@ export const LibraryPage: React.FC = () => {
   const handleRenewLicense = async () => {
     if (!renewingProduct) return;
     try {
-      const price = selectedDuration === 1 ? 29 : 199;
+      const basePrice = renewingProduct.price;
+      const price = selectedDuration === 1 ? Math.round(basePrice / 12) : basePrice;
       const durationDays = selectedDuration === 1 ? 30 : 365;
 
-      addToast(`Processing $${price} license extension for "${renewingProduct.title}"...`, "info");
+      addToast(`Processing ₹${price.toLocaleString('en-IN')} license extension for "${renewingProduct.title}"...`, "info");
       
       const res = await API.renewProduct(renewingProduct.id, price, durationDays, renewingProduct.section);
       
@@ -224,7 +225,7 @@ export const LibraryPage: React.FC = () => {
   const handleRenewDiscord = async () => {
     if (!renewingDiscordCourse) return;
     try {
-      const price = 4092; // ₹4,092 for 1 year extension
+      const price = Math.round(renewingDiscordCourse.price * 2);
       addToast(`Processing ₹${price.toLocaleString('en-IN')} invoice for Discord support 1-Year renewal...`, "info");
       
       // Save days-left persistently
@@ -1186,7 +1187,11 @@ export const LibraryPage: React.FC = () => {
 
 
       {/* RENEWAL MODAL DIALOG OVERLAY */}
-      {renewingProduct && (
+      {renewingProduct && (() => {
+        const monthPrice = Math.round(renewingProduct.price / 12);
+        const yearPrice = renewingProduct.price;
+        const activePrice = selectedDuration === 1 ? monthPrice : yearPrice;
+        return (
         <div className="fixed inset-0 bg-[#07080a]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
             <div className="flex items-center gap-2 text-blue-400">
@@ -1215,7 +1220,7 @@ export const LibraryPage: React.FC = () => {
                   }`}
                 >
                   <span className="text-xs">30 Days Boost</span>
-                  <span className="font-mono text-sm tracking-tight text-blue-400 font-black">₹2,421</span>
+                  <span className="font-mono text-sm tracking-tight text-blue-400 font-black">₹{monthPrice.toLocaleString('en-IN')}</span>
                 </button>
 
                 {/* 1 Year Option */}
@@ -1229,14 +1234,14 @@ export const LibraryPage: React.FC = () => {
                   }`}
                 >
                   <span className="text-xs">1 Year Standard</span>
-                  <span className="font-mono text-sm tracking-tight text-blue-400 font-black">₹16,617</span>
+                  <span className="font-mono text-sm tracking-tight text-blue-400 font-black">₹{yearPrice.toLocaleString('en-IN')}</span>
                 </button>
               </div>
             </div>
 
             <div className="p-3 bg-[#12151c] rounded-xl border border-[#1e222b] flex justify-between items-center text-xs">
               <span className="text-neutral-500 font-sans">Total Due:</span>
-              <span className="font-mono font-black text-white text-sm">₹{selectedDuration === 1 ? '2,421' : '16,617'} INR</span>
+              <span className="font-mono font-black text-white text-sm">₹{activePrice.toLocaleString('en-IN')} INR</span>
             </div>
 
             {/* Actions */}
@@ -1259,10 +1264,13 @@ export const LibraryPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* DISCORD SUPPORT RENEWAL MODAL */}
-      {renewingDiscordCourse && (
+      {renewingDiscordCourse && (() => {
+        const discordPrice = Math.round(renewingDiscordCourse.price * 2);
+        return (
         <div className="fixed inset-0 bg-[#07080a]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
             <div className="flex items-center gap-2 text-indigo-400">
@@ -1283,7 +1291,7 @@ export const LibraryPage: React.FC = () => {
                 <span className="text-[10px] text-indigo-400 font-mono font-bold block uppercase tracking-wide">SUPPORT RENEWAL TICKET</span>
                 <span className="text-neutral-300 font-sans">12 Months (Full Coverage)</span>
               </div>
-              <span className="font-mono font-black text-indigo-400 text-sm">₹4,092 INR</span>
+              <span className="font-mono font-black text-indigo-400 text-sm">₹{discordPrice.toLocaleString('en-IN')} INR</span>
             </div>
 
             <p className="text-[10px] text-neutral-500 font-mono leading-normal text-center bg-[#07080a] p-2 rounded-lg border border-[#1e222b]">
@@ -1310,7 +1318,8 @@ export const LibraryPage: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
     </div>
   );
