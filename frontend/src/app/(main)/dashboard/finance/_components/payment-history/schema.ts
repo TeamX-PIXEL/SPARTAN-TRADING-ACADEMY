@@ -8,7 +8,9 @@ export const paymentSchema = z.object({
   item: z.string(),
   amount: z.number(),
   status: z.enum(["completed", "pending", "refunded"]),
-  method: z.enum(["Card", "Crypto", "Bank Transfer", "Telegram", "Other"]),
+  method: z.enum(["Card", "Crypto", "Bank Transfer", "UPI", "Free", "Other"]),
 });
 
 export type Payment = z.infer<typeof paymentSchema>;
+
+export const PAYMENT_METHODS = ["Card", "Crypto", "Bank Transfer", "UPI", "Free", "Other"] as const;

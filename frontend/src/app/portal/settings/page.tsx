@@ -18,8 +18,10 @@ export const SettingsPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [mobileNumber, setMobileNumber] = useState('+1 (555) 0168-912');
   const [tvid, setTvid] = useState('');
-  const [telegramid, setTelegramid] = useState('');
-  const [discordid, setDiscordid] = useState('');
+  const [telegramUserId, setTelegramUserId] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [discordUserId, setDiscordUserId] = useState('');
+  const [discordChatId, setDiscordChatId] = useState('');
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
   const [username, setUsername] = useState('');
@@ -45,8 +47,10 @@ export const SettingsPage: React.FC = () => {
       setName(user.name);
       setEmail(user.email);
       setTvid(user.tvid || '');
-      setTelegramid(user.telegramid || '');
-      setDiscordid(user.discordid || '');
+      setTelegramUserId(user.telegram_user_id || '');
+      setTelegramChatId(user.telegram_chat_id || '');
+      setDiscordUserId(user.discord_user_id || '');
+      setDiscordChatId(user.discord_chat_id || '');
       setFirstname(user.firstname || '');
       setLastname(user.lastname || '');
       setUsername(user.username || '');
@@ -64,8 +68,10 @@ export const SettingsPage: React.FC = () => {
       setIsSaving(true);
       await updateUserProfile({
         tvid,
-        telegramid,
-        discordid,
+        telegram_user_id: telegramUserId,
+        telegram_chat_id: telegramChatId,
+        discord_user_id: discordUserId,
+        discord_chat_id: discordChatId,
       });
       addToast("Identity credentials synced and validated!", "success");
       
@@ -266,22 +272,22 @@ export const SettingsPage: React.FC = () => {
 
                   <div className="space-y-1.5 flex flex-col justify-end">
                     <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-neutral-400 block">
-                      Telegram Username / ID
+                      Telegram Username
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        value={telegramid}
-                        onChange={(e) => setTelegramid(e.target.value)}
-                        disabled={!!user?.telegramid}
-                        className={`w-full bg-[#0c0d0f] border border-[#1e222b] rounded-xl ${user?.telegramid ? 'pl-9' : 'px-3.5'} py-2 text-xs placeholder-neutral-600 outline-none ${
-                          user?.telegramid
+                        value={telegramUserId}
+                        onChange={(e) => setTelegramUserId(e.target.value)}
+                        disabled={!!user?.telegram_user_id}
+                        className={`w-full bg-[#0c0d0f] border border-[#1e222b] rounded-xl ${user?.telegram_user_id ? 'pl-9' : 'px-3.5'} py-2 text-xs placeholder-neutral-600 outline-none ${
+                          user?.telegram_user_id
                             ? 'text-neutral-400 cursor-not-allowed select-none'
                             : 'text-white focus:border-blue-500'
                         }`}
-                        placeholder="E.g. @username"
+                        placeholder="@username"
                       />
-                      {user?.telegramid && (
+                      {user?.telegram_user_id && (
                         <div className="absolute left-3 top-2.5 text-neutral-600">
                           <Lock className="w-3.5 h-3.5" />
                         </div>
@@ -291,22 +297,72 @@ export const SettingsPage: React.FC = () => {
 
                   <div className="space-y-1.5 flex flex-col justify-end">
                     <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-neutral-400 block">
-                      Discord Username / ID
+                      Telegram Chat ID
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        value={discordid}
-                        onChange={(e) => setDiscordid(e.target.value)}
-                        disabled={!!user?.discordid}
-                        className={`w-full bg-[#0c0d0f] border border-[#1e222b] rounded-xl ${user?.discordid ? 'pl-9' : 'px-3.5'} py-2 text-xs placeholder-neutral-600 outline-none ${
-                          user?.discordid
+                        value={telegramChatId}
+                        onChange={(e) => setTelegramChatId(e.target.value)}
+                        disabled={!!user?.telegram_chat_id}
+                        className={`w-full bg-[#0c0d0f] border border-[#1e222b] rounded-xl ${user?.telegram_chat_id ? 'pl-9' : 'px-3.5'} py-2 text-xs placeholder-neutral-600 outline-none ${
+                          user?.telegram_chat_id
                             ? 'text-neutral-400 cursor-not-allowed select-none'
                             : 'text-white focus:border-blue-500'
                         }`}
-                        placeholder="E.g. @discord_user"
+                        placeholder="123456789"
                       />
-                      {user?.discordid && (
+                      {user?.telegram_chat_id && (
+                        <div className="absolute left-3 top-2.5 text-neutral-600">
+                          <Lock className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 flex flex-col justify-end">
+                    <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-neutral-400 block">
+                      Discord Username
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={discordUserId}
+                        onChange={(e) => setDiscordUserId(e.target.value)}
+                        disabled={!!user?.discord_user_id}
+                        className={`w-full bg-[#0c0d0f] border border-[#1e222b] rounded-xl ${user?.discord_user_id ? 'pl-9' : 'px-3.5'} py-2 text-xs placeholder-neutral-600 outline-none ${
+                          user?.discord_user_id
+                            ? 'text-neutral-400 cursor-not-allowed select-none'
+                            : 'text-white focus:border-blue-500'
+                        }`}
+                        placeholder="@discord_user"
+                      />
+                      {user?.discord_user_id && (
+                        <div className="absolute left-3 top-2.5 text-neutral-600">
+                          <Lock className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 flex flex-col justify-end">
+                    <label className="text-[10px] uppercase font-mono tracking-wider font-bold text-neutral-400 block">
+                      Discord Chat ID
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={discordChatId}
+                        onChange={(e) => setDiscordChatId(e.target.value)}
+                        disabled={!!user?.discord_chat_id}
+                        className={`w-full bg-[#0c0d0f] border border-[#1e222b] rounded-xl ${user?.discord_chat_id ? 'pl-9' : 'px-3.5'} py-2 text-xs placeholder-neutral-600 outline-none ${
+                          user?.discord_chat_id
+                            ? 'text-neutral-400 cursor-not-allowed select-none'
+                            : 'text-white focus:border-blue-500'
+                        }`}
+                        placeholder="9876543210"
+                      />
+                      {user?.discord_chat_id && (
                         <div className="absolute left-3 top-2.5 text-neutral-600">
                           <Lock className="w-3.5 h-3.5" />
                         </div>
@@ -454,11 +510,19 @@ export const SettingsPage: React.FC = () => {
                 </div>
                 <div className="flex justify-between">
                   <span>Telegram Contact:</span>
-                  <span className="text-blue-400">{(telegramid) ? `@${telegramid.replace(/^@/, '')}` : 'NOT BOUND'}</span>
+                  <span className="text-blue-400">{(telegramUserId) ? `@${telegramUserId.replace(/^@/, '')}` : 'NOT BOUND'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Discord ID:</span>
-                  <span className="text-indigo-400">{(discordid || user.discordid) ? `@${(discordid || user.discordid || "").replace(/^@/, '')}` : 'NOT BOUND'}</span>
+                  <span>Telegram Chat ID:</span>
+                  <span className="text-blue-300">{telegramChatId || 'NOT SET'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Discord Username:</span>
+                  <span className="text-indigo-400">{(discordUserId) ? `@${discordUserId.replace(/^@/, '')}` : 'NOT BOUND'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Discord Chat ID:</span>
+                  <span className="text-indigo-300">{discordChatId || 'NOT SET'}</span>
                 </div>
               </div>
             </div>

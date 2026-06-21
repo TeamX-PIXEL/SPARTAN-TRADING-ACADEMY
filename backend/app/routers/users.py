@@ -2,12 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import date
 import mysql.connector
 
 from app.database import get_db, get_db_connection
-from app.models import User, Purchase, Course, Indicator, Bot
-from app.schemas import UserResponse, UserPasswordUpdate, UserSearchResult
+from app.models import User, Transaction, Course, Indicator, Bot
+from app.schemas import UserResponse, UserPasswordUpdate
 from app.core.deps import get_current_user, get_current_admin
 from app.core.security import verify_password, get_password_hash
 from app.config import get_settings
@@ -15,26 +14,21 @@ from pydantic import BaseModel
 
 settings = get_settings()
 
+DB_TABLE_EVERGREEN = settings.DB_TABLE_EVERGREEN
+DB_TABLE_LEGACY = settings.DB_TABLE_LEGACY
+
 # ---------------------------------------------------------------------------
 # Helper models / functions
 # ---------------------------------------------------------------------------
 
 class UserProfileUpdate(BaseModel):
-    UserName: Optional[str] = None
+    firstname: Optional[str] = None
+    lastname: Optional[str] = None
     tvid: Optional[str] = None
-
-
-def get_bot_model(token_env: str) -> str:
-    """Map a bot's token_env to its model name (Evergreen/Legacy/Alpha)."""
-    mapping = {
-        "EVERGREEN_BOT_TOKEN": "Evergreen",
-        "LEGACY_BOT_TOKEN": "Legacy",
-        "ALPHA_BOT_TOKEN": "Alpha",
-    }
-    return mapping.get(token_env)
-
-
-DB_TABLE_USERS = settings.DB_TABLE_USERS
+    telegram_user_id: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
+    discord_user_id: Optional[str] = None
+    discord_chat_id: Optional[str] = None
 
 # ---------------------------------------------------------------------------
 # Router for SQLAlchemy-based user endpoints (prefix /users)
@@ -67,11 +61,21 @@ def update_my_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update the current user's profile (name and TradingView username)."""
-    if update.UserName is not None:
-        current_user.UserName = update.UserName
+    """Update the current user's profile."""
+    if update.firstname is not None:
+        current_user.firstname = update.firstname
+    if update.lastname is not None:
+        current_user.lastname = update.lastname
     if update.tvid is not None:
         current_user.tvid = update.tvid
+    if update.telegram_user_id is not None:
+        current_user.telegram_user_id = update.telegram_user_id
+    if update.telegram_chat_id is not None:
+        current_user.telegram_chat_id = update.telegram_chat_id
+    if update.discord_user_id is not None:
+        current_user.discord_user_id = update.discord_user_id
+    if update.discord_chat_id is not None:
+        current_user.discord_chat_id = update.discord_chat_id
     db.commit()
     db.refresh(current_user)
     return current_user
@@ -101,56 +105,53 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_admin=Depen
     return {"message": "User deleted successfully"}
 
 
-@router.get("/users/{user_id}/purchases")
-def get_user_purchases(user_id: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
+@router.get("/users/{user_id}/transactions")
+def get_user_transactions(user_id: int, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    purchases = db.query(Purchase).filter(Purchase.user_id == user_id).all()
-    return purchases
+    transactions = db.query(Transaction).filter(Transaction.username == user.UserID).all()
+    return transactions
 
 
 @router.get("/me/purchases")
 def get_my_purchases(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Return product UUIDs for courses, indicators, and bots the current user owns."""
-    purchases = db.query(Purchase).filter(Purchase.user_id == current_user.id).all()
+    """Return course, indicator, and bot IDs the current user owns via transactions."""
+    transactions = db.query(Transaction).filter(Transaction.username == current_user.UserID).all()
 
-    course_ids = [p.product_id for p in purchases if p.product_section == 1]
-    indicator_ids = [p.product_id for p in purchases if p.product_section == 2]
+    course_ids = [t.course_id for t in transactions if t.product_section == "Course" and t.course_id]
+    indicator_ids = [t.indicator_id for t in transactions if t.product_section == "Indicator" and t.indicator_id]
 
-    courses = db.query(Course).filter(Course.id.in_(course_ids)).all() if course_ids else []
-    indicators = db.query(Indicator).filter(Indicator.id.in_(indicator_ids)).all() if indicator_ids else []
+    courses = db.query(Course).filter(Course.course_id.in_(course_ids)).all() if course_ids else []
+    indicators = db.query(Indicator).filter(Indicator.indicator_id.in_(indicator_ids)).all() if indicator_ids else []
 
-    # Bots: derive from raw MySQL signal_users instead of purchases
+    # Bots: derive from bot alert filter tables
     bot_uuids = []
     connection = get_db_connection()
     if connection:
         cursor = connection.cursor(dictionary=True)
         try:
-            cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE user = %s", (current_user.UserID,))
-            row = cursor.fetchone()
-            if row:
-                today = date.today()
-                all_bots = db.query(Bot).filter(Bot.status == "active").all()
-                for b in all_bots:
-                    model = get_bot_model(b.token_env)
-                    if model:
-                        access = row.get(f"{model}_Access")
-                        expiry = row.get(f"{model}_Expiry")
-                        if access and expiry and expiry >= today:
-                            bot_uuids.append(b.product_uuid)
+            for model, table in [("Evergreen", DB_TABLE_EVERGREEN), ("Legacy", DB_TABLE_LEGACY)]:
+                access_col = f"{model}_Access"
+                cursor.execute(f"SELECT {access_col} FROM {table} WHERE user = %s", (current_user.UserID,))
+                row = cursor.fetchone()
+                if row and row.get(access_col):
+                    # Find the bot with matching title
+                    bot = db.query(Bot).filter(Bot.title == model).first()
+                    if bot:
+                        bot_uuids.append(bot.bot_id)
         finally:
             cursor.close()
             connection.close()
 
     return {
-        "courses": [c.product_uuid for c in courses],
-        "indicators": [i.product_uuid for i in indicators],
+        "courses": [c.course_id for c in courses],
+        "indicators": [i.indicator_id for i in indicators],
         "bots": bot_uuids
     }
 
 
-@router.get("/users/search", response_model=List[UserSearchResult])
+@router.get("/users/search")
 def search_users(q: str, current_admin=Depends(get_current_admin), db: Session = Depends(get_db)):
     """Search users by @UserID prefix or email."""
     query = q.strip()
@@ -160,4 +161,13 @@ def search_users(q: str, current_admin=Depends(get_current_admin), db: Session =
     else:
         users = db.query(User).filter(User.email.ilike(f"{query}%")).limit(8).all()
 
-    return users
+    return [
+        {
+            "id": u.id,
+            "username": u.UserID or "",
+            "name": f"{u.firstname or ''} {u.lastname or ''}".strip() or u.UserID or "",
+            "email": u.email or "",
+            "tvid": u.tvid or "",
+        }
+        for u in users
+    ]

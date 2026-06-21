@@ -45,8 +45,8 @@ export const IndicatorsPage: React.FC = () => {
       setIsLoadingMore(true);
       const res = await API.getIndicators(skip, limit);
       setIndicators(prev => {
-        const existingUuids = new Set(prev.map(i => i.uuid));
-        const newItems = res.items.filter(i => !existingUuids.has(i.uuid));
+        const existingIds = new Set(prev.map(i => i.id));
+        const newItems = res.items.filter(i => !existingIds.has(i.id));
         return [...prev, ...newItems];
       });
       setSkip(prev => prev + limit);
@@ -78,9 +78,9 @@ export const IndicatorsPage: React.FC = () => {
     };
   }, [skip, hasMore, isLoadingMore]);
 
-  const openProduct = (uuid: string) => {
+  const openProduct = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set('product', uuid);
+    params.set('product', id);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -127,10 +127,10 @@ export const IndicatorsPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {indicators.map((ind) => (
               <ProductCard
-                key={ind.uuid}
+                key={ind.id}
                 product={ind}
                 type="indicator"
-                purchased={purchasedIds.indicators.includes(ind.uuid)}
+                purchased={purchasedIds.indicators.includes(ind.id)}
                 onOpenDetails={openProduct}
               />
             ))}

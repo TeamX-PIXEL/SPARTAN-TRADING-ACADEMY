@@ -54,7 +54,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchWithAuth } from "@/lib/api-fetch";
+import { fetchWithAuth, API_BASE_URL } from "@/lib/api-fetch";
 
 // --- CONSTANTS ---
 const CURRENCIES = [
@@ -354,7 +354,7 @@ export default function AddUserPage() {
     };
 
     try {
-      const response = await fetchWithAuth("http://127.0.0.1:8000/api/admin/botusers", {
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/admin/botusers`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

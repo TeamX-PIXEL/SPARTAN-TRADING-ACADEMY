@@ -8,16 +8,10 @@ import { ThisMonthRevenue } from "./_components/kpis/this-month-revenue";
 import { TransactionsKpi } from "./_components/kpis/transactions";
 import { MonthlyRevenueChart } from "./_components/monthly-revenue-chart";
 import { PaymentHistoryTable } from "./_components/payment-history/columns";
+import { type Payment } from "./_components/payment-history/schema";
 import { RevenueBySection } from "./_components/revenue-by-section";
-import {
-  type BotUserLike,
-  buildKpis,
-  buildMonthlyRevenue,
-  buildPayments,
-  buildSectionRevenue,
-  type CourseLike,
-  type IndicatorLike,
-} from "./_lib/derive-payments";
+import { type SectionRevenue, type PaymentSection } from "./_lib/derive-payments";
+import { SECTION_LABELS } from "./_lib/derive-payments";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
@@ -31,47 +25,113 @@ async function safeFetch<T>(url: string, init?: RequestInit, fallback: T = [] as
   }
 }
 
-async function fetchCourses(accessToken: string | undefined) {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  const result = await safeFetch<{ courses: CourseLike[] } | CourseLike[]>(`${API_URL}/api/admin/courses`, { headers });
-  const data = Array.isArray(result) ? result : (result?.courses ?? []);
-  return data;
+interface SummaryResponse {
+  total_revenue: number;
+  total_transactions: number;
+  this_month_revenue: number;
+  this_month_transactions: number;
+  last_month_revenue: number;
+  last_month_transactions: number;
+  by_section: {
+    section: string;
+    revenue: number;
+    count: number;
+    topItem: string | null;
+  }[];
 }
 
-async function fetchIndicators(accessToken: string | undefined) {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  return safeFetch<IndicatorLike[]>(`${API_URL}/fetch/indicators`, { headers });
+interface MonthlyRevenuePoint {
+  monthKey: string;
+  monthLabel: string;
+  academy: number;
+  indicators: number;
+  bot_alerts: number;
+  total: number;
 }
 
-async function fetchBotUsers(accessToken: string | undefined) {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+interface TransactionRow {
+  id: string;
+  date: string;
+  section: string;
+  customer: string;
+  item: string | null;
+  amount: number;
+  method: string | null;
+  status: string;
+}
 
-  const result = await safeFetch<{ success: boolean; users?: BotUserLike[]; message?: string }>(
-    `${API_URL}/api/admin/botusers`,
-    { headers },
-    { success: false, users: [] },
-  );
-  if (!result?.success || !Array.isArray(result.users)) return [];
-  return result.users;
+const SUMMARY_DEFAULTS: SummaryResponse = {
+  total_revenue: 0,
+  total_transactions: 0,
+  this_month_revenue: 0,
+  this_month_transactions: 0,
+  last_month_revenue: 0,
+  last_month_transactions: 0,
+  by_section: [],
+};
+
+async function fetchSummary(token: string | undefined) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return safeFetch<SummaryResponse>(`${API_URL}/api/admin/transactions/summary`, { headers }, SUMMARY_DEFAULTS);
+}
+
+async function fetchMonthlyRevenue(token: string | undefined) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return safeFetch<MonthlyRevenuePoint[]>(`${API_URL}/api/admin/transactions/monthly-revenue`, { headers });
+}
+
+async function fetchTransactions(token: string | undefined) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return safeFetch<TransactionRow[]>(`${API_URL}/api/admin/transactions`, { headers });
 }
 
 export default async function Page() {
   const session = await getServerSession(authOptions);
+  const token = session?.accessToken;
 
-  const [courses, indicators, users] = await Promise.all([
-    fetchCourses(session?.accessToken),
-    fetchIndicators(session?.accessToken),
-    fetchBotUsers(session?.accessToken),
+  const [summary, monthlyRevenue, transactions] = await Promise.all([
+    fetchSummary(token),
+    fetchMonthlyRevenue(token),
+    fetchTransactions(token),
   ]);
 
-  const payments = buildPayments(courses, indicators, users);
-  const kpis = buildKpis(payments);
-  const monthlyRevenue = buildMonthlyRevenue(payments);
-  const sectionRevenue = buildSectionRevenue(payments);
+  const kpis = {
+    thisMonthRevenue: summary.this_month_revenue,
+    thisMonthTransactions: summary.this_month_transactions,
+    lastMonthRevenue: summary.last_month_revenue,
+    lastMonthTransactions: summary.last_month_transactions,
+    averageTransactionValue:
+      summary.this_month_transactions > 0
+        ? summary.this_month_revenue / summary.this_month_transactions
+        : 0,
+    monthOverMonthChange:
+      summary.last_month_revenue > 0
+        ? ((summary.this_month_revenue - summary.last_month_revenue) / summary.last_month_revenue) * 100
+        : null,
+  };
+
+  const sectionRevenue: SectionRevenue[] = summary.by_section.map((s) => ({
+    section: s.section as SectionRevenue["section"],
+    label: SECTION_LABELS[s.section as PaymentSection] ?? s.section,
+    revenue: s.revenue,
+    transactionCount: s.count,
+    topItem: s.topItem,
+  }));
   const totalRevenue = sectionRevenue.reduce((acc, s) => acc + s.revenue, 0);
+
+  const payments: Payment[] = transactions.map((t) => ({
+    id: t.id,
+    date: t.date,
+    section: t.section as Payment["section"],
+    customer: t.customer,
+    item: t.item ?? "—",
+    amount: t.amount,
+    status: t.status as Payment["status"],
+    method: (t.method ?? "Other") as Payment["method"],
+  }));
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">

@@ -149,13 +149,12 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
   async function handleSubmit() {
     if (!valid) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
 
     const payload = {
       course_id: form.course_id.trim().toUpperCase().replace(/\s+/g, "-"),
       title: form.title.trim(),
       description: form.description.trim(),
-      longDescription: form.longDescription.trim(),
+      longDescription: form.longDescription.trim() || "",
       price: parseFloat(form.price) || 0,
       image: form.image,
       category: form.category.trim() || "General",
@@ -163,13 +162,13 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
       duration_months: parseInt(form.duration_months, 10) || 1,
       lecturer: form.lecturer.trim() || "TBA",
       difficulty: form.difficulty,
-      scheduled_at: new Date(form.scheduled_at).toISOString(),
+      scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : "",
     };
 
     if (isEdit && course) {
-      updateCourse(course.id, payload);
+      await updateCourse(course.course_id, payload);
     } else {
-      addCourse(payload);
+      await addCourse(payload);
     }
     setSaving(false);
     onOpenChange(false);

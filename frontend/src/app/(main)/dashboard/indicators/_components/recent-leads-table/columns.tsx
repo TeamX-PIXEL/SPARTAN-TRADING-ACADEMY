@@ -96,11 +96,6 @@ export const indicatorColumns: ColumnDef<IndicatorRow>[] = [
     cell: ({ row }) => <span className="tabular-nums">{row.original.buyers}</span>,
   },
   {
-    accessorKey: "expiry_period",
-    header: "Expiry Period",
-    cell: ({ row }) => <span className="text-muted-foreground">{row.original.expiry_period || "—"}</span>,
-  },
-  {
     id: "actions",
     cell: ({ row, table }) => {
       const meta = table.options.meta as any;

@@ -22,7 +22,6 @@ import {
   LineChart,
   Zap
 } from 'lucide-react';
-import { MOCK_COURSES, MOCK_INDICATORS, MOCK_BOTS } from '@/portal/data';
 
 export const HistoryPage: React.FC = () => {
   const { user, addToast } = useApp();
@@ -65,30 +64,19 @@ export const HistoryPage: React.FC = () => {
     }, 1200);
   };
 
-  // Classify each transaction based on product UUID or title
+  // Classify each transaction based on product_section from backend
   const getTransactionCategory = (tx: Transaction) => {
-    const uuid = tx.productUuid;
-    if (uuid && uuid.startsWith('course')) return 'courses';
-    if (uuid && uuid.startsWith('indicator')) return 'indicators';
-    if (uuid && uuid.startsWith('bot')) return 'bots';
-    
-    // Fallback checks
-    const isCourse = MOCK_COURSES.some(c => c.uuid === uuid) || 
-                     tx.productTitle.toLowerCase().includes('blueprint') || 
-                     tx.productTitle.toLowerCase().includes('class') || 
-                     tx.productTitle.toLowerCase().includes('course');
-    if (isCourse) return 'courses';
-    
-    const isBot = MOCK_BOTS.some(b => b.uuid === uuid) || 
-                  tx.productTitle.toLowerCase().includes('bot');
-    if (isBot) return 'bots';
-    
-    const isIndicator = MOCK_INDICATORS.some(i => i.uuid === uuid) || 
-                        tx.productTitle.toLowerCase().includes('indicator') || 
-                        tx.productTitle.toLowerCase().includes('script');
-    if (isIndicator) return 'indicators';
-    
-    return 'courses'; // default fallback
+    if (tx.product_section === "Course") return "courses";
+    if (tx.product_section === "Indicator") return "indicators";
+    if (tx.product_section === "Bot") return "bots";
+
+    // Fallback: use product_id prefix
+    const id = tx.product_id || "";
+    if (id.startsWith("CRS") || id.startsWith("course")) return "courses";
+    if (id.startsWith("IND") || id.startsWith("indicator")) return "indicators";
+    if (id.startsWith("BOT") || id.startsWith("bot")) return "bots";
+
+    return "courses";
   };
 
   // Filter transactions
@@ -316,7 +304,7 @@ export const HistoryPage: React.FC = () => {
                           {categoryLabel === 'Indicator' ? (
                             <>TVID: <span className="text-neutral-400">{tx.tvid}</span></>
                           ) : categoryLabel === 'Bot' ? (
-                            <>Telegram: <span className="text-neutral-400">{user?.telegramid || "Not Configured"}</span></>
+                            <>Telegram: <span className="text-neutral-400">{user?.telegram_user_id || "Not Configured"}</span></>
                           ) : (
                             <>Email: <span className="text-neutral-400">{user?.email || "Not Configured"}</span></>
                           )} • {new Date(tx.date).toLocaleDateString(undefined, {

@@ -1,6 +1,5 @@
-import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Float, Text, JSON, UniqueConstraint
 from app.database import Base
 
 
@@ -8,30 +7,35 @@ class Indicator(Base):
     __tablename__ = "indicators"
 
     id = Column(Integer, primary_key=True, index=True)
-    product_uuid = Column(String(255), unique=True, index=True, default=lambda: str(uuid.uuid4()))
-
-    pine_id = Column(String(255), nullable=True, index=True)
-    session_id = Column(String(255), nullable=True, index=True)
-
-    indicator_name = Column(String(255), index=True)
-    indicator_description = Column(String(255))
-    indicator_price = Column(Float, default=0.0)
-    showcase_image = Column(String(255), nullable=True)
-
-    buyers = Column(Integer, default=0)
-    status = Column(String(255), default="unavailable", index=True)
-    expiry_period = Column(String(255), nullable=True)
+    indicator_id = Column(String(64), unique=True, index=True)
+    title = Column(String(255), index=True)
+    description = Column(Text)
+    long_description = Column(Text, nullable=True)
+    price = Column(Float, default=0.0)
+    image = Column(Text, nullable=True)
+    category = Column(String(128), default="General")
+    features = Column(JSON, nullable=True)
+    script_type = Column(String(128), default="Pine Script (v6)")
+    accuracy = Column(String(32), nullable=True)
+    timeframe = Column(String(128), nullable=True)
+    pine_id = Column(String(128), nullable=True, index=True)
+    session_id = Column(String(128), nullable=True, index=True)
+    status = Column(String(16), default="unavailable", index=True)
+    purchased_count = Column(Integer, default=0)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
-class IndicatorUser(Base):
-    __tablename__ = "indicator_users"
+class IndicatorMember(Base):
+    __tablename__ = "indicator_members"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"), index=True)
-    indicator_id = Column(Integer, ForeignKey("indicators.id"), index=True)
+    username = Column(String(100), index=True)
+    indicator_id = Column(String(64), index=True)
     expiry = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint("username", "indicator_id", name="uk_indicator_user"),
+    )

@@ -2,7 +2,7 @@ import z from "zod";
 
 export const indicatorSchema = z.object({
   id: z.number(),
-  product_uuid: z.string(),
+  indicator_id: z.string(),
   pine_id: z.string().nullable().optional(),
   session_id: z.string().nullable().optional(),
   indicator_name: z.string(),
@@ -11,7 +11,6 @@ export const indicatorSchema = z.object({
   showcase_image: z.string().nullable().optional(),
   buyers: z.number(),
   status: z.enum(["unavailable", "paused", "running"]),
-  expiry_period: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
 });

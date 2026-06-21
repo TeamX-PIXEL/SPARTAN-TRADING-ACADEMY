@@ -21,8 +21,13 @@ import { LessonsManageView } from "./lessons-manage-view";
 export function AcademyView() {
   const courses = useAcademyStore((s) => s.courses);
   const view = useAcademyStore((s) => s.view);
+  const fetchCourses = useAcademyStore((s) => s.fetchCourses);
   const [tab, setTab] = React.useState<"upcoming" | "ongoing" | "completed">("upcoming");
   const [createOpen, setCreateOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
 
   const upcoming = courses.filter((c) => c.status === "upcoming");
   const ongoing = courses.filter((c) => c.status === "ongoing");

@@ -80,13 +80,17 @@ export function UpcomingCoursesTable({ courses }: Props) {
     setEditOpen(true);
   }
 
-  function handleRemove(course: Course) {
+  async function handleRemove(course: Course) {
     if (course.purchased_count > 0) {
       toast.error(`Cannot remove course — ${course.title} has ${course.purchased_count} enrolled member(s). Remove members first.`);
       return;
     }
-    removeCourse(course.id);
-    toast.success(`Course removed — ${course.course_id} — ${course.title} was deleted.`);
+    const ok = await removeCourse(course.course_id);
+    if (ok) {
+      toast.success(`Course removed — ${course.course_id} — ${course.title} was deleted.`);
+    } else {
+      toast.error("Failed to delete course.");
+    }
   }
 
   return (

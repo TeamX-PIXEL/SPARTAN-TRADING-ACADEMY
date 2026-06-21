@@ -111,6 +111,17 @@ export function LessonsManageView({ course }: Props) {
   const members = useAcademyStore((s) => s.members);
   const addLesson = useAcademyStore((s) => s.addLesson);
   const removeLesson = useAcademyStore((s) => s.removeLesson);
+  const updateLesson = useAcademyStore((s) => s.updateLesson);
+  const fetchLessons = useAcademyStore((s) => s.fetchLessons);
+  const fetchMembers = useAcademyStore((s) => s.fetchMembers);
+  const updateMemberExpiry = useAcademyStore((s) => s.updateMemberExpiry);
+
+  React.useEffect(() => {
+    if (course) {
+      fetchLessons(course.course_id);
+      fetchMembers(course.course_id);
+    }
+  }, [course, fetchLessons, fetchMembers]);
 
   const [addOpen, setAddOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
@@ -171,11 +182,9 @@ export function LessonsManageView({ course }: Props) {
   const valid = form.title.trim() && form.link.trim() && (form.type === "youtube" || form.startTime);
 
   async function handleAdd() {
-    if (!valid) return;
+    if (!valid || !course) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
-    addLesson({
-      courseId: course!.id,
+    const lesson = await addLesson(course.course_id, {
       title: form.title.trim(),
       type: form.type,
       link: form.link.trim(),
@@ -185,12 +194,20 @@ export function LessonsManageView({ course }: Props) {
     setSaving(false);
     setAddOpen(false);
     setForm({ title: "", type: "youtube", link: "", startTime: "", duration: "60 min" });
-    toast.success(`${LESSON_TYPE_META[form.type].label} — ${form.title} is now live for members.`);
+    if (lesson) {
+      toast.success(`${LESSON_TYPE_META[form.type].label} — ${form.title} is now live for members.`);
+    } else {
+      toast.error("Failed to create lesson.");
+    }
   }
 
-  function handleRemove(id: number, title: string) {
-    removeLesson(id);
-    toast.success(`Lesson removed — ${title}`);
+  async function handleRemove(id: number, title: string) {
+    const ok = await removeLesson(id);
+    if (ok) {
+      toast.success(`Lesson removed — ${title}`);
+    } else {
+      toast.error("Failed to delete lesson.");
+    }
   }
 
   function handleOpenEdit(lesson: { id: number; title: string; type: LessonType; link: string; startTime?: string; duration?: string }) {
@@ -207,20 +224,13 @@ export function LessonsManageView({ course }: Props) {
 
   async function handleSaveEdit() {
     if (!editLesson) return;
-    useAcademyStore.setState((s) => ({
-      lessons: s.lessons.map((l) =>
-        l.id === editLesson.id
-          ? {
-              ...l,
-              title: editLesson.title,
-              type: editLesson.type,
-              link: editLesson.link,
-              startTime: editLesson.type === "youtube" ? undefined : new Date(editLesson.startTime).toISOString(),
-              duration: editLesson.duration || undefined,
-            }
-          : l,
-      ),
-    }));
+    await updateLesson(editLesson.id, {
+      title: editLesson.title,
+      type: editLesson.type,
+      link: editLesson.link,
+      startTime: editLesson.type === "youtube" ? undefined : new Date(editLesson.startTime).toISOString(),
+      duration: editLesson.duration || undefined,
+    });
     setEditOpen(false);
     toast.success(`Lesson "${editLesson.title}" updated.`);
   }
@@ -233,13 +243,7 @@ export function LessonsManageView({ course }: Props) {
 
   async function handleSaveDiscordEdit() {
     if (!discordEditMember) return;
-    useAcademyStore.setState((s) => ({
-      members: s.members.map((m) =>
-        m.id === discordEditMember.id
-          ? { ...m, discordExpiry: discordExpiry || undefined }
-          : m,
-      ),
-    }));
+    await updateMemberExpiry(discordEditMember.id, discordExpiry);
     setDiscordEditOpen(false);
     toast.success(`Discord expiry updated for ${discordEditMember.name}.`);
   }
@@ -511,7 +515,7 @@ export function LessonsManageView({ course }: Props) {
                                 </div>
                                 <div className="min-w-0">
                                   <p className="truncate font-medium">{m.name}</p>
-                                  <p className="text-[11px] text-muted-foreground">@{m.username || m.tvid}</p>
+                                  <p className="text-[11px] text-muted-foreground">@{m.username || "—"}</p>
                                 </div>
                               </div>
                             </TableCell>

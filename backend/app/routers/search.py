@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 from datetime import datetime
 from pydantic import BaseModel
 from app.database import get_db
-from app.models import Course, Indicator, Bot, CourseSchedule
+from app.models import Course, Indicator, Bot
 from app.core.deps import get_current_user
 
 router = APIRouter(tags=["Search"])
@@ -64,8 +64,8 @@ def search_all(q: str = "", db: Session = Depends(get_db)):
 
     indicators = db.query(Indicator).filter(
         or_(
-            Indicator.indicator_name.ilike(search_term),
-            Indicator.indicator_description.ilike(search_term)
+            Indicator.title.ilike(search_term),
+            Indicator.description.ilike(search_term)
         )
     ).all()
 
@@ -74,17 +74,17 @@ def search_all(q: str = "", db: Session = Depends(get_db)):
         if key not in seen_ids:
             seen_ids.add(key)
             results.append({
-                "id": ind.product_uuid,
+                "id": ind.indicator_id,
                 "section": "indicator",
-                "title": ind.indicator_name,
-                "description": ind.indicator_description,
-                "price": ind.indicator_price,
-                "thumbnail": ind.showcase_image,
+                "title": ind.title,
+                "description": ind.description,
+                "price": ind.price,
+                "thumbnail": ind.image,
             })
 
     bots = db.query(Bot).filter(
         or_(
-            Bot.display_name.ilike(search_term),
+            Bot.title.ilike(search_term),
             Bot.description.ilike(search_term)
         )
     ).all()
@@ -94,12 +94,12 @@ def search_all(q: str = "", db: Session = Depends(get_db)):
         if key not in seen_ids:
             seen_ids.add(key)
             results.append({
-                "id": b.product_uuid,
+                "id": b.bot_id,
                 "section": "bot",
-                "title": b.display_name,
+                "title": b.title,
                 "description": b.description,
                 "price": b.price,
-                "thumbnail": b.thumbnail,
+                "thumbnail": b.image,
             })
 
     return results

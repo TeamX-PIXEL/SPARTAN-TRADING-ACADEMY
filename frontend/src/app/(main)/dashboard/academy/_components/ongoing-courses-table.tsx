@@ -261,9 +261,9 @@ export function OngoingCoursesTable({ courses }: Props) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
+              onClick={async () => {
                 if (confirmDoneCourse) {
-                  markCourseCompleted(confirmDoneCourse.id);
+                  await markCourseCompleted(confirmDoneCourse.course_id);
                   toast.success(`${confirmDoneCourse.title} moved to the Completed tab.`);
                 }
               }}

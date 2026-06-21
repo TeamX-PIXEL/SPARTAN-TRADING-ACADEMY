@@ -7,7 +7,7 @@ import httpx
 import urllib.parse
 from datetime import date
 from app.database import get_db, get_db_connection
-from app.services.telegram import get_matching_users, send_telegram_notifications, DB_TABLE_USERS
+from app.services.telegram import get_matching_users, send_telegram_notifications, DB_TABLE_EVERGREEN, DB_TABLE_LEGACY
 from app.config import get_settings
 
 settings = get_settings()
@@ -18,11 +18,9 @@ router = APIRouter(tags=["Webhooks"])
 async def send_telegram_reply(chat_id: str, text: str, bot_token: str) -> bool:
     encoded_text = urllib.parse.quote(text)
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage?chat_id={chat_id}&text={encoded_text}"
-    print(f"DEBUG: Sending reply to {chat_id}: {text[:50]}...")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url)
-            print(f"DEBUG: Telegram response: {response.status_code} - {response.text}")
             return response.status_code == 200
     except Exception as e:
         print(f"Error sending reply: {e}")
@@ -36,11 +34,9 @@ async def send_telegram_inline_keyboard(chat_id: str, text: str, buttons: list, 
         "reply_markup": {"inline_keyboard": buttons},
     }
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    print(f"DEBUG: Sending inline keyboard to {chat_id}: {text[:50]}...")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(url, json=payload)
-            print(f"DEBUG: Telegram keyboard response: {response.status_code} - {response.text}")
             return response.status_code == 200
     except Exception as e:
         print(f"Error sending inline keyboard: {e}")
@@ -74,31 +70,75 @@ async def delete_telegram_message(chat_id: str, message_id: int, bot_token: str)
         return False
 
 
-def get_user_status_message(user: dict) -> str:
-    msg = "📊 *Your Subscription Status*\n\n"
+def _get_user_bot_access(username: str) -> dict:
+    """Check which bots a user has active access to via bot_members expiry."""
     today = date.today()
-    models = []
+    result = {"Evergreen": False, "Legacy": False}
 
-    if user.get('Evergreen_Access') and user.get('Evergreen_Expiry') and user['Evergreen_Expiry'] >= today:
-        models.append(f"✅ *Evergreen* - Expires: {user['Evergreen_Expiry']}")
-    else:
-        msg += "❌ *Evergreen* - Not Active\n"
+    conn = get_db_connection()
+    if not conn:
+        return result
 
-    if user.get('Legacy_Access') and user.get('Legacy_Expiry') and user['Legacy_Expiry'] >= today:
-        models.append(f"✅ *Legacy* - Expires: {user['Legacy_Expiry']}")
-    else:
-        msg += "❌ *Legacy* - Not Active\n"
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT bot_id, expiry FROM bot_members WHERE username = %s",
+            (username,)
+        )
+        for row in cursor.fetchall():
+            bot_id = row.get("bot_id", "")
+            expiry = row.get("expiry")
+            if bot_id == "evergreen" and expiry and expiry.date() >= today:
+                result["Evergreen"] = True
+            elif bot_id == "legacy" and expiry and expiry.date() >= today:
+                result["Legacy"] = True
+    finally:
+        cursor.close()
+        conn.close()
 
-    if user.get('Alpha_Access') and user.get('Alpha_Expiry') and user['Alpha_Expiry'] >= today:
-        models.append(f"✅ *Alpha* - Expires: {user['Alpha_Expiry']}")
-    else:
-        msg += "❌ *Alpha* - Not Active\n"
+    return result
 
-    if models:
-        msg += "\n".join(models)
 
-    msg += "\n\n🌐 Manage filters: https://spartantradingacademy.com/miniapp"
+def get_user_status_message(username: str) -> str:
+    access = _get_user_bot_access(username)
+    msg = "📊 *Your Subscription Status*\n\n"
+    for model, has_access in access.items():
+        if has_access:
+            msg += f"✅ *{model}* - Active\n"
+        else:
+            msg += f"❌ *{model}* - Not Active\n"
+    msg += "\n🌐 Manage filters: https://spartantradingacademy.com/miniapp"
     return msg
+
+
+def _resolve_telegram_id(username: str) -> str | None:
+    """Look up a user's telegram_user_id from the users table."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT telegram_user_id FROM users WHERE username = %s", (username,))
+        row = cursor.fetchone()
+        return row.get("telegram_user_id") if row else None
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def _resolve_username_by_telegram(telegram_id: str) -> str | None:
+    """Look up a username by telegram_user_id from the users table."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT username FROM users WHERE telegram_user_id = %s", (telegram_id,))
+        row = cursor.fetchone()
+        return row.get("username") if row else None
+    finally:
+        cursor.close()
+        conn.close()
 
 
 @router.post('/webhook')
@@ -106,12 +146,10 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     try:
         content_type = request.headers.get('content-type', '')
         if not (content_type.startswith('application/json') or content_type.startswith('text/plain')):
-            print(f"Error: Invalid Content-Type: {content_type}")
             return PlainTextResponse("Error: Content-Type must be application/json or text/plain", status_code=415)
 
         raw_data = await request.body()
         if not raw_data:
-            print("Error: Empty payload received")
             return PlainTextResponse("Error: Empty payload", status_code=400)
 
         try:
@@ -198,12 +236,23 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
             'mitigation_strength': mitigation_smt_strength
         }
 
-        matching_users = get_matching_users(db, symbol, timeframe, trend, zone, entry_type, modifiers, model)
+        matching_users = get_matching_users(symbol, timeframe, trend, zone, entry_type, modifiers, model)
 
         if matching_users:
             cleaned_message = '\n'.join([line for line in message.split('\n') if not line.strip().startswith('Model')])
-            target_bot_token = settings.LEGACY_BOT_TOKEN if model == "Legacy" else settings.ALPHA_BOT_TOKEN if model == "Alpha" else settings.EVERGREEN_BOT_TOKEN
-            await send_telegram_notifications(cleaned_message, matching_users, target_bot_token)
+            target_bot_token = settings.LEGACY_BOT_TOKEN if model == "Legacy" else settings.EVERGREEN_BOT_TOKEN
+
+            # Resolve telegram_user_ids from usernames
+            users_with_telegram = []
+            for u in matching_users:
+                username = u.get('user', '')
+                if username:
+                    telegram_id = _resolve_telegram_id(username)
+                    if telegram_id:
+                        users_with_telegram.append({'user': username, 'telegram_id': telegram_id})
+
+            if users_with_telegram:
+                await send_telegram_notifications(cleaned_message, users_with_telegram, target_bot_token)
 
         return PlainTextResponse("Success", status_code=200)
 
@@ -219,8 +268,6 @@ async def telegram_user_webhook(request: Request):
         if not data:
             return PlainTextResponse("Error: No data", status_code=400)
 
-        print(f"DEBUG: Webhook received: {data}")
-
         callback_query = data.get('callback_query')
         if callback_query:
             cq_id = callback_query.get('id')
@@ -230,7 +277,7 @@ async def telegram_user_webhook(request: Request):
             if cq_data.startswith('connect_yes:') or cq_data.startswith('connect_no:'):
                 parts = cq_data.split(':')
                 action = parts[0]
-                user_id = parts[1] if len(parts) > 1 else None
+                target_username = parts[1] if len(parts) > 1 else None
 
                 connection = get_db_connection()
                 if not connection:
@@ -241,27 +288,28 @@ async def telegram_user_webhook(request: Request):
                 try:
                     message_id = callback_query.get('message', {}).get('message_id')
 
-                    if action == 'connect_yes' and user_id:
-                        cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE id = %s", (user_id,))
-                        key_user = cursor.fetchone()
+                    if action == 'connect_yes' and target_username:
+                        # Update users table with telegram_user_id
+                        cursor.execute("SELECT username, telegram_user_id FROM users WHERE username = %s", (target_username,))
+                        user_row = cursor.fetchone()
 
-                        if key_user:
-                            if key_user.get('telegram_id') and str(key_user['telegram_id']) == str(chat_id):
+                        if user_row:
+                            if user_row.get('telegram_user_id') and str(user_row['telegram_user_id']) == str(chat_id):
                                 await answer_callback_query(cq_id, settings.EVERGREEN_BOT_TOKEN)
                                 await send_telegram_reply(chat_id, "✅ You are already connected!", settings.EVERGREEN_BOT_TOKEN)
-                            elif key_user.get('telegram_id'):
+                            elif user_row.get('telegram_user_id'):
                                 await answer_callback_query(cq_id, settings.EVERGREEN_BOT_TOKEN)
                                 await send_telegram_reply(chat_id, "⚠️ This account is already linked to another Telegram account. Please contact support.", settings.EVERGREEN_BOT_TOKEN)
                             else:
-                                cursor.execute(f"UPDATE {DB_TABLE_USERS} SET telegram_id = %s WHERE id = %s", (str(chat_id), user_id))
+                                cursor.execute("UPDATE users SET telegram_user_id = %s WHERE username = %s", (str(chat_id), target_username))
                                 connection.commit()
                                 await answer_callback_query(cq_id, settings.EVERGREEN_BOT_TOKEN, "✅ Connected successfully!")
-                                await send_telegram_reply(chat_id, "✅ Successfully linked your account!\n\n" + get_user_status_message(key_user), settings.EVERGREEN_BOT_TOKEN)
+                                await send_telegram_reply(chat_id, "✅ Successfully linked your account!\n\n" + get_user_status_message(target_username), settings.EVERGREEN_BOT_TOKEN)
                         else:
                             await answer_callback_query(cq_id, settings.EVERGREEN_BOT_TOKEN, "User not found")
                     elif action == 'connect_no':
                         await answer_callback_query(cq_id, settings.EVERGREEN_BOT_TOKEN)
-                        await send_telegram_reply(chat_id, "❌ Connection cancelled. You can link your account anytime by using /start with your key.", settings.EVERGREEN_BOT_TOKEN)
+                        await send_telegram_reply(chat_id, "❌ Connection cancelled.", settings.EVERGREEN_BOT_TOKEN)
 
                     if message_id:
                         await delete_telegram_message(str(chat_id), message_id, settings.EVERGREEN_BOT_TOKEN)
@@ -280,100 +328,30 @@ async def telegram_user_webhook(request: Request):
 
         chat_id = message.get('chat', {}).get('id')
         text = message.get('text', '').strip()
-        from_user = message.get('from', {})
-        username = from_user.get('username') or from_user.get('first_name', '')
 
         if not chat_id or not text:
             return PlainTextResponse("OK", status_code=200)
 
-        connection = get_db_connection()
-        if not connection:
-            return PlainTextResponse("Error: DB connection failed", status_code=500)
+        # Look up username by telegram_user_id
+        username = _resolve_username_by_telegram(str(chat_id))
 
-        try:
-            cursor = connection.cursor(dictionary=True)
-            cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE telegram_id = %s", (str(chat_id),))
-            user = cursor.fetchone()
+        text_lower = text.lower()
 
-            text_lower = text.lower()
-            today = date.today()
+        if text_lower.startswith('/start'):
+            if username:
+                access = _get_user_bot_access(username)
+                has_active = any(access.values())
+                reply = get_user_status_message(username) if has_active else "⚠️ Your subscription has expired. Please contact support to renew."
+            else:
+                reply = "🔑 Welcome! Please contact support to link your account."
 
-            if text_lower.startswith('/start'):
-                parts = text.split()
-                if len(parts) > 1:
-                    api_key = parts[1]
-                    if len(api_key) == 19 and api_key.replace('-', '').isalnum() and api_key.count('-') == 3:
-                        cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE user_key = %s", (api_key,))
-                        key_user = cursor.fetchone()
+            await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
 
-                        if not key_user:
-                            reply = "❌ Invalid key. Please check your key and try again."
-                            await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-                        else:
-                            if key_user.get('telegram_id') and str(key_user['telegram_id']) == str(chat_id):
-                                reply = "✅ You are already connected!"
-                                await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-                            elif key_user.get('telegram_id'):
-                                reply = "⚠️ This account is already linked to another Telegram account. Please contact support."
-                                await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-                            else:
-                                confirm_text = "🔗 *Connect Account*\n\nWould you like to connect your bot with this Telegram account?"
-                                buttons = [
-                                    [
-                                        {"text": "✅ Yes", "callback_data": f"connect_yes:{key_user['id']}"},
-                                        {"text": "❌ No", "callback_data": f"connect_no:{key_user['id']}"}
-                                    ]
-                                ]
-                                await send_telegram_inline_keyboard(chat_id, confirm_text, buttons, settings.EVERGREEN_BOT_TOKEN)
-                    else:
-                        reply = "❌ Invalid key format. Your key should look like: ABCD-EFGH-IJKL-MNOP"
-                        await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-                else:
-                    if user:
-                        has_active = any(
-                            user.get(f'{m}_Access') and user.get(f'{m}_Expiry') and user[f'{m}_Expiry'] >= today
-                            for m in ['Evergreen', 'Legacy', 'Alpha']
-                        )
-                        reply = get_user_status_message(user) if has_active else "⚠️ Your subscription has expired. Please contact support to renew."
-                    else:
-                        reply = "🔑 Welcome! Please enter your 16-digit access key to link your account."
-
-                    await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-
-            elif len(text.replace('-', '')) == 16 and text.replace('-', '').isalnum():
-                cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE REPLACE(user_key, '-', '') = %s", (text.replace('-', ''),))
-                key_user = cursor.fetchone()
-
-                if not key_user:
-                    reply = "❌ Invalid key. Please check your key and try again."
-                    await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-                else:
-                    if key_user.get('telegram_id') and str(key_user['telegram_id']) == str(chat_id):
-                        reply = "✅ You are already logged in!"
-                    elif key_user.get('telegram_id'):
-                        reply = "⚠️ This key is already linked to another Telegram account. Please contact support."
-                    else:
-                        cursor.execute(f"UPDATE {DB_TABLE_USERS} SET telegram_id = %s WHERE id = %s", (str(chat_id), key_user['id']))
-                        connection.commit()
-
-                        reply = "✅ Successfully linked your account!\n\n" + get_user_status_message(key_user)
-
-                await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-
-            elif user:
-                has_active = any(
-                    user.get(f'{m}_Access') and user.get(f'{m}_Expiry') and user[f'{m}_Expiry'] >= today
-                    for m in ['Evergreen', 'Legacy', 'Alpha']
-                )
-                reply = get_user_status_message(user) if has_active else "⚠️ Your subscription has expired. Please contact support to renew."
-                await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
-
-        except Exception as e:
-            print(f"Error in telegram_user_webhook: {e}")
-            return PlainTextResponse("Error", status_code=500)
-        finally:
-            cursor.close()
-            connection.close()
+        elif username:
+            access = _get_user_bot_access(username)
+            has_active = any(access.values())
+            reply = get_user_status_message(username) if has_active else "⚠️ Your subscription has expired. Please contact support to renew."
+            await send_telegram_reply(chat_id, reply, settings.EVERGREEN_BOT_TOKEN)
 
         return PlainTextResponse("OK", status_code=200)
 

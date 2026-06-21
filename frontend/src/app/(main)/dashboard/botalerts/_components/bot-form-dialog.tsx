@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { ImagePlus, Loader2, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -46,8 +47,6 @@ interface FormState {
   exchange: string;
   apy: string;
   status: BotStatus;
-  apiKey: string;
-  telegram_id: string;
   token_env: string;
   image: string;
 }
@@ -63,8 +62,6 @@ const EMPTY: FormState = {
   exchange: "Binance",
   apy: "",
   status: "Idle",
-  apiKey: "",
-  telegram_id: "",
   token_env: "",
   image: "",
 };
@@ -105,8 +102,6 @@ export function BotFormDialog({ open, onOpenChange, bot }: BotFormDialogProps) {
         exchange: bot.exchange,
         apy: bot.apy,
         status: bot.status,
-        apiKey: bot.apiKey ?? "",
-        telegram_id: bot.telegram_id ?? "",
         token_env: bot.token_env ?? "",
         image: bot.image,
       });
@@ -150,7 +145,6 @@ export function BotFormDialog({ open, onOpenChange, bot }: BotFormDialogProps) {
   async function handleSubmit() {
     if (!valid) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
 
     const payload = {
       bot_id: form.bot_id.trim().toUpperCase().replace(/\s+/g, "-"),
@@ -164,15 +158,27 @@ export function BotFormDialog({ open, onOpenChange, bot }: BotFormDialogProps) {
       exchange: form.exchange.trim() || "Binance",
       apy: form.apy.trim() || "—",
       status: form.status,
-      apiKey: form.apiKey.trim() || undefined,
-      telegram_id: form.telegram_id.trim() || undefined,
       token_env: form.token_env.trim() || undefined,
     };
 
     if (isEdit && bot) {
-      updateBot(bot.id, payload);
+      const result = await updateBot(bot.id, payload);
+      if (result) {
+        toast.success(`"${payload.title}" updated.`);
+      } else {
+        toast.error("Failed to update bot.");
+        setSaving(false);
+        return;
+      }
     } else {
-      addBot(payload);
+      const result = await addBot(payload);
+      if (result) {
+        toast.success(`"${payload.title}" created.`);
+      } else {
+        toast.error("Failed to create bot.");
+        setSaving(false);
+        return;
+      }
     }
     setSaving(false);
     onOpenChange(false);
@@ -278,8 +284,7 @@ export function BotFormDialog({ open, onOpenChange, bot }: BotFormDialogProps) {
               <Label htmlFor="bf-apy">Historical Return APY</Label>
               <Input
                 id="bf-apy"
-                type="number"
-                min={0}
+                type="text"
                 value={form.apy}
                 onChange={(e) => set("apy", e.target.value)}
                 placeholder="e.g. 142"

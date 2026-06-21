@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { UserProfile, CartItem, ToastMessage, Course, Indicator, Bot, ProductType, AppNotification } from "@/types/portal";
-import { API, getStoredPurchases } from "./api";
+import { API } from "./api";
 
 interface AppContextType {
   user: UserProfile | null;
@@ -25,7 +25,7 @@ interface AppContextType {
   checkout: () => Promise<void>;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
   refreshLibrary: () => Promise<void>;
-  addNotification: (title: string, message: string, type: "lesson" | "alert" | "system", linkTo: string, courseUuid?: string) => void;
+  addNotification: (title: string, message: string, type: "lesson" | "alert" | "system", linkTo: string, course_id?: string) => void;
   markNotificationAsRead: (id: string) => void;
   clearNotification: (id: string) => void;
   clearAllNotifications: () => void;
@@ -146,7 +146,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  const addNotification = (title: string, message: string, type: "lesson" | "alert" | "system", linkTo: string, courseUuid?: string) => {
+  const addNotification = (title: string, message: string, type: "lesson" | "alert" | "system", linkTo: string, course_id?: string) => {
     const newNotif: AppNotification = {
       id: `n-${Math.random().toString(36).substring(7)}`,
       title,
@@ -155,7 +155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
       read: false,
       linkTo,
-      courseUuid,
+      course_id,
     };
     setNotifications((prev) => {
       const updated = [newNotif, ...prev];

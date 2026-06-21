@@ -40,22 +40,22 @@ from email_service import send_verification_email, generate_verification_token, 
 # --- Local Database & Schema Imports ---
 from database import (
     SessionLocal, User, Course, Purchase,
-    CourseChapter, CourseSchedule,
+    Lesson, CourseSchedule,
     CourseWaitlist, BatchTemplate, BatchList,
-    Indicator, CourseProgress, IndicatorUser, Bot
+    Indicator, CourseProgress, IndicatorMember, Bot
 )
 
 from schemas import (
     UserCreate, UserLogin, UserResponse, UserPasswordUpdate,
     CourseCreate, CourseResponse, CourseUpdate,
     PurchaseCreate, PurchaseResponse,
-    CourseChapterCreate, CourseChapterResponse, CourseChapterUpdate,
+    LessonCreate, LessonResponse, LessonUpdate,
     BatchListResponse, BatchTemplateCreate, BatchTemplateResponse, 
     ManualBatchCreate, BatchTemplateUpdate, BatchListUpdate, 
     CourseScheduleCreate, CourseScheduleUpdate, CourseScheduleResponse,IndicatorCreate, IndicatorUpdate, IndicatorResponse, IndicatorDeleteResponse,
     ProgressUpdate, UserProgressResponse, AdminUserProgress, BatchProgressSummary, ProgressSessionResponse,
     BatchParticipantResponse, UserSearchResult, AddParticipantRequest,
-    IndicatorUserResponse, AddIndicatorUserRequest,
+    IndicatorMemberResponse, AddIndicatorMemberRequest,
     PaginatedCoursesResponse, PublicCourseResponse, BotResponse, BotPublicResponse, BotUpdate
 )
 
@@ -1516,7 +1516,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     
     new_user = User(
         UserID=user.UserID,
-        UserName=user.UserName,
+        firstname=user.firstname,
         email=user.email,
         password=hashed_password,
         tvid=user.tvid,
@@ -1711,9 +1711,9 @@ def resend_verification(request: ResendVerificationRequest):
 def get_batch_schedules(batch_list_id: int, db: Session = Depends(get_db)):
     """Fetches all schedules for a specific batch to populate the UI table"""
     
-    # We join with CourseChapter to get the actual chapter names if they exist
-    schedules = db.query(CourseSchedule, CourseChapter.title)\
-        .outerjoin(CourseChapter, CourseSchedule.chapter_id == CourseChapter.id)\
+    # We join with Lesson to get the actual chapter names if they exist
+    schedules = db.query(CourseSchedule, Lesson.title)\
+        .outerjoin(Lesson, CourseSchedule.lesson_id == Lesson.id)\
         .filter(CourseSchedule.batch_list_id == batch_list_id)\
         .order_by(CourseSchedule.scheduled_at.asc())\
         .all()
@@ -1817,8 +1817,8 @@ def get_my_progress(batch_list_id: int, current_user: User = Depends(get_current
         raise HTTPException(status_code=404, detail="Batch not found")
 
     course = db.query(Course).filter(Course.id == batch.course_id).first()
-    schedules = db.query(CourseSchedule, CourseChapter.title).outerjoin(
-        CourseChapter, CourseSchedule.chapter_id == CourseChapter.id
+    schedules = db.query(CourseSchedule, Lesson.title).outerjoin(
+        Lesson, CourseSchedule.lesson_id == Lesson.id
     ).filter(
         CourseSchedule.batch_list_id == batch_list_id
     ).order_by(CourseSchedule.scheduled_at.asc()).all()
@@ -1907,8 +1907,8 @@ def get_batch_progress_admin(batch_list_id: int, current_admin: dict = Depends(g
         CourseWaitlist.waitlist_batch_id == batch.assigned_to
     ).all()
 
-    schedules = db.query(CourseSchedule, CourseChapter.title).outerjoin(
-        CourseChapter, CourseSchedule.chapter_id == CourseChapter.id
+    schedules = db.query(CourseSchedule, Lesson.title).outerjoin(
+        Lesson, CourseSchedule.lesson_id == Lesson.id
     ).filter(
         CourseSchedule.batch_list_id == batch_list_id
     ).order_by(CourseSchedule.scheduled_at.asc()).all()
@@ -1957,7 +1957,7 @@ def get_batch_progress_admin(batch_list_id: int, current_admin: dict = Depends(g
 
         users_progress.append(AdminUserProgress(
             user_id=user.id,
-            user_name=user.UserName,
+            user_name=user.firstname,
             email=user.email,
             total_sessions=total_sessions,
             completed_sessions=completed_count,
@@ -2128,25 +2128,25 @@ def _build_indicator_response(indicator: Indicator, current_user: Optional[User]
     is_purchased = False
     expiry = None
     if current_user:
-        iu = db.query(IndicatorUser).filter(
-            IndicatorUser.user_id == current_user.id,
-            IndicatorUser.indicator_id == indicator.id
+        iu = db.query(IndicatorMember).filter(
+            IndicatorMember.user_id == current_user.id,
+            IndicatorMember.indicator_id == indicator.id
         ).first()
         if iu:
             is_purchased = True
             expiry = iu.expiry.isoformat() if iu.expiry else None
     return {
         "id": indicator.id,
-        "indicator_name": indicator.indicator_name,
-        "indicator_description": indicator.indicator_description,
-        "indicator_price": indicator.indicator_price,
-        "showcase_image": indicator.showcase_image,
+        "title": indicator.title,
+        "description": indicator.description,
+        "price": indicator.price,
+        "image": indicator.image,
         "status": indicator.status,
         "pine_id": indicator.pine_id,
         "session_id": indicator.session_id,
-        "expiry_period": indicator.expiry_period,
-        "product_uuid": indicator.product_uuid,
-        "buyers": indicator.buyers,
+        "expiry_period": "1M",
+        "indicator_id": indicator.indicator_id,
+        "buyers": indicator.purchased_count,
         "created_at": indicator.created_at,
         "updated_at": indicator.updated_at,
         "is_purchased": is_purchased,
@@ -2164,13 +2164,13 @@ def get_public_indicators(
     indicators = db.query(Indicator).offset(skip).limit(limit).all()
     return [_build_indicator_response(i, current_user, db) for i in indicators]
 
-@app.get("/public/indicators/{product_uuid}", response_model=IndicatorResponse)
+@app.get("/public/indicators/{indicator_id}", response_model=IndicatorResponse)
 def get_public_indicator(
-    product_uuid: str,
+    indicator_id: str,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user)
 ):
-    indicator = db.query(Indicator).filter(Indicator.product_uuid == product_uuid).first()
+    indicator = db.query(Indicator).filter(Indicator.indicator_id == indicator_id).first()
     if not indicator:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Indicator not found")
     return _build_indicator_response(indicator, current_user, db)
@@ -2223,27 +2223,27 @@ def check_course_id(course_id: str, db: Session = Depends(get_db), current_admin
 # CHAPTER API ROUTES
 # ==========================================
 
-@app.get("/api/admin/courses/{course_id}/chapters", response_model=list[CourseChapterResponse])
+@app.get("/api/admin/courses/{course_id}/chapters", response_model=list[LessonResponse])
 def get_course_chapters(course_id: int, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
-    return db.query(CourseChapter).filter(CourseChapter.course_id == course_id).order_by(CourseChapter.chapter_index).all()
+    return db.query(Lesson).filter(Lesson.course_id == course_id).order_by(Lesson.chapter_index).all()
 
-@app.post("/api/admin/courses/{course_id}/chapters", response_model=CourseChapterResponse)
-def create_chapter(course_id: int, chapter: CourseChapterCreate, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
+@app.post("/api/admin/courses/{course_id}/chapters", response_model=LessonResponse)
+def create_chapter(course_id: int, chapter: LessonCreate, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
     # Automatically append to the end of the index list if no index is provided
     if chapter.chapter_index == 0:
-        count = db.query(CourseChapter).filter(CourseChapter.course_id == course_id).count()
+        count = db.query(Lesson).filter(Lesson.course_id == course_id).count()
         chapter.chapter_index = count + 1
 
-    new_chapter = CourseChapter(**chapter.model_dump(), course_id=course_id)
+    new_chapter = Lesson(**chapter.model_dump(), course_id=course_id)
     db.add(new_chapter)
     db.commit()
     db.refresh(new_chapter)
     return new_chapter
 
 
-@app.put("/chapters/{chapter_id}", response_model=CourseChapterResponse)
-def update_chapter(chapter_id: int, chapter_update: CourseChapterUpdate, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
-    db_chapter = db.query(CourseChapter).filter(CourseChapter.id == chapter_id).first()
+@app.put("/chapters/{lesson_id}", response_model=LessonResponse)
+def update_chapter(lesson_id: int, chapter_update: LessonUpdate, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
+    db_chapter = db.query(Lesson).filter(Lesson.id == lesson_id).first()
     if not db_chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     
@@ -2255,9 +2255,9 @@ def update_chapter(chapter_id: int, chapter_update: CourseChapterUpdate, db: Ses
     db.refresh(db_chapter)
     return db_chapter
 
-@app.delete("/chapters/{chapter_id}")
-def delete_chapter(chapter_id: int, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
-    db_chapter = db.query(CourseChapter).filter(CourseChapter.id == chapter_id).first()
+@app.delete("/chapters/{lesson_id}")
+def delete_chapter(lesson_id: int, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
+    db_chapter = db.query(Lesson).filter(Lesson.id == lesson_id).first()
     if not db_chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")
     db.delete(db_chapter)
@@ -2274,8 +2274,8 @@ def delete_chapter(chapter_id: int, db: Session = Depends(get_db), current_admin
 def get_course_batches(course_id: int, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
     """Fetches all generated batches with chapter progress"""
     batches = db.query(BatchList).filter(BatchList.course_id == course_id).all()
-    total_chapters = db.query(func.count(CourseChapter.id)).filter(
-        CourseChapter.course_id == course_id
+    total_chapters = db.query(func.count(Lesson.id)).filter(
+        Lesson.course_id == course_id
     ).scalar()
 
     batch_ids = [b.id for b in batches]
@@ -2283,10 +2283,10 @@ def get_course_batches(course_id: int, db: Session = Depends(get_db), current_ad
     if batch_ids:
         rows = db.query(
             CourseSchedule.batch_list_id,
-            func.count(distinct(CourseSchedule.chapter_id)).label("scheduled")
+            func.count(distinct(CourseSchedule.lesson_id)).label("scheduled")
         ).filter(
             CourseSchedule.batch_list_id.in_(batch_ids),
-            CourseSchedule.chapter_id.isnot(None)
+            CourseSchedule.lesson_id.isnot(None)
         ).group_by(CourseSchedule.batch_list_id).all()
         scheduled_map = {row.batch_list_id: row.scheduled for row in rows}
 
@@ -2525,7 +2525,7 @@ def get_batch_participants(batch_id: int, db: Session = Depends(get_db), current
     return [
         {
             "user_id": w.user_id,
-            "user_name": user_map[w.user_id].UserName if w.user_id in user_map else "Unknown",
+            "user_name": user_map[w.user_id].firstname if w.user_id in user_map else "Unknown",
             "email": user_map[w.user_id].email if w.user_id in user_map else "",
             "waitlist_batch_id": w.waitlist_batch_id,
             "created_at": w.created_at,
@@ -2662,16 +2662,16 @@ def delete_indicator(indicator_id: int, db: Session = Depends(get_db), current_a
     db.delete(db_indicator)
     db.commit()
     
-    return {"message": f"Indicator '{db_indicator.indicator_name}' deleted successfully"}
+    return {"message": f"Indicator '{db_indicator.title}' deleted successfully"}
 
-@app.get("/indicators/{indicator_id}/users", response_model=List[IndicatorUserResponse])
+@app.get("/indicators/{indicator_id}/users", response_model=List[IndicatorMemberResponse])
 def get_indicator_users(indicator_id: int, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
     indicator = db.query(Indicator).filter(Indicator.id == indicator_id).first()
     if not indicator:
         raise HTTPException(status_code=404, detail="Indicator not found")
 
-    entries = db.query(IndicatorUser).filter(
-        IndicatorUser.indicator_id == indicator_id
+    entries = db.query(IndicatorMember).filter(
+        IndicatorMember.indicator_id == indicator_id
     ).all()
 
     if not entries:
@@ -2685,7 +2685,7 @@ def get_indicator_users(indicator_id: int, db: Session = Depends(get_db), curren
         {
             "id": e.id,
             "user_id": e.user_id,
-            "user_name": user_map[e.user_id].UserName if e.user_id in user_map else "Unknown",
+            "user_name": user_map[e.user_id].firstname if e.user_id in user_map else "Unknown",
             "email": user_map[e.user_id].email if e.user_id in user_map else "",
             "indicator_id": e.indicator_id,
             "expiry": e.expiry,
@@ -2697,7 +2697,7 @@ def get_indicator_users(indicator_id: int, db: Session = Depends(get_db), curren
 @app.post("/indicators/{indicator_id}/users")
 def add_indicator_user(
     indicator_id: int,
-    payload: AddIndicatorUserRequest,
+    payload: AddIndicatorMemberRequest,
     current_admin: dict = Depends(get_current_admin),
     db: Session = Depends(get_db)
 ):
@@ -2713,7 +2713,7 @@ def add_indicator_user(
         raise HTTPException(status_code=400, detail="User does not have a TradingView username (tvid) set")
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    ext_type, ext_length, expiry_date = parse_expiry_period(indicator.expiry_period, now)
+    ext_type, ext_length, expiry_date = parse_expiry_period("1M", now)
 
     try:
         session_id = indicator.session_id
@@ -2742,9 +2742,9 @@ def add_indicator_user(
             status_code=500
         )
 
-    existing = db.query(IndicatorUser).filter(
-        IndicatorUser.user_id == payload.user_id,
-        IndicatorUser.indicator_id == indicator_id
+    existing = db.query(IndicatorMember).filter(
+        IndicatorMember.user_id == payload.user_id,
+        IndicatorMember.indicator_id == indicator_id
     ).first()
 
     if existing:
@@ -2753,13 +2753,13 @@ def add_indicator_user(
         db.add(existing)
         message = "User access updated successfully"
     else:
-        new_entry = IndicatorUser(
+        new_entry = IndicatorMember(
             user_id=payload.user_id,
             indicator_id=indicator_id,
             expiry=expiry_date
         )
         db.add(new_entry)
-        indicator.buyers += 1
+        indicator.purchased_count += 1
         db.add(indicator)
         message = "User added successfully"
 
@@ -2786,12 +2786,12 @@ def create_purchase(
             raise HTTPException(status_code=404, detail="Course not found")
         product_id = course.id
     elif product_section == 2:
-        indicator = db.query(Indicator).filter(Indicator.product_uuid == purchase.product_uuid).first()
+        indicator = db.query(Indicator).filter(Indicator.indicator_id == purchase.product_uuid).first()
         if not indicator:
             raise HTTPException(status_code=404, detail="Indicator not found")
         product_id = indicator.id
     elif product_section == 3:
-        bot = db.query(Bot).filter(Bot.product_uuid == purchase.product_uuid).first()
+        bot = db.query(Bot).filter(Bot.bot_id == purchase.product_uuid).first()
         if not bot:
             raise HTTPException(status_code=404, detail="Bot not found")
         product_id = bot.id
@@ -2931,11 +2931,11 @@ def create_purchase(
             )
 
         # 3. Increment Buyers Count
-        indicator.buyers += 1
+        indicator.purchased_count += 1
         db.add(indicator)
 
         # 4. TRADINGVIEW ACCESS INTEGRATION
-        ext_type, ext_length, expiry_date = parse_expiry_period(indicator.expiry_period, now)
+        ext_type, ext_length, expiry_date = parse_expiry_period("1M", now)
 
         try:
             # We use the session_id and pine_id stored in the Indicator table
@@ -2962,10 +2962,10 @@ def create_purchase(
             print(f"TradingView Integration Error: {e}")
             raise HTTPException(status_code=500, detail=f"Internal error granting TV access: {str(e)}")
 
-        # 5. Add/Update IndicatorUser entry with calculated expiry
-        existing_entry = db.query(IndicatorUser).filter(
-            IndicatorUser.user_id == current_user.id,
-            IndicatorUser.indicator_id == indicator_id
+        # 5. Add/Update IndicatorMember entry with calculated expiry
+        existing_entry = db.query(IndicatorMember).filter(
+            IndicatorMember.user_id == current_user.id,
+            IndicatorMember.indicator_id == indicator_id
         ).first()
 
         if existing_entry:
@@ -2973,7 +2973,7 @@ def create_purchase(
             existing_entry.updated_at = datetime.now(timezone.utc)
             db.add(existing_entry)
         else:
-            new_entry = IndicatorUser(
+            new_entry = IndicatorMember(
                 user_id=current_user.id,
                 indicator_id=indicator_id,
                 expiry=expiry_date
@@ -3088,14 +3088,14 @@ def get_my_purchases(db: Session = Depends(get_db), current_user: User = Depends
                         access = row.get(f"{model}_Access")
                         expiry = row.get(f"{model}_Expiry")
                         if access and expiry and expiry >= today:
-                            bot_uuids.append(b.product_uuid)
+                            bot_uuids.append(b.bot_id)
         finally:
             cursor.close()
             connection.close()
     
     return {
         "courses": [c.product_uuid for c in courses],
-        "indicators": [i.product_uuid for i in indicators],
+        "indicators": [i.indicator_id for i in indicators],
         "bots": bot_uuids
     }
 
@@ -3165,9 +3165,9 @@ def get_enrollment_status(course_uuid: str, db: Session = Depends(get_db), curre
                 if end_time > now:
                     is_ongoing = True
                     # Use the previous (ongoing) schedule as the active one
-                    prev_chapter = db.query(CourseChapter).filter(
-                        CourseChapter.id == prev_schedule.chapter_id
-                    ).first() if prev_schedule.chapter_id else None
+                    prev_chapter = db.query(Lesson).filter(
+                        Lesson.id == prev_schedule.lesson_id
+                    ).first() if prev_schedule.lesson_id else None
                     schedule_info = {
                         "scheduled_at": prev_schedule.scheduled_at.isoformat() if prev_schedule.scheduled_at else None,
                         "estimated_duration": prev_schedule.estimated_duration,
@@ -3180,9 +3180,9 @@ def get_enrollment_status(course_uuid: str, db: Session = Depends(get_db), curre
 
             if not is_ongoing and next_schedule:
                 schedule_assigned = True
-                next_chapter = db.query(CourseChapter).filter(
-                    CourseChapter.id == next_schedule.chapter_id
-                ).first() if next_schedule.chapter_id else None
+                next_chapter = db.query(Lesson).filter(
+                    Lesson.id == next_schedule.lesson_id
+                ).first() if next_schedule.lesson_id else None
                 schedule_info = {
                     "scheduled_at": next_schedule.scheduled_at.isoformat() if next_schedule.scheduled_at else None,
                     "estimated_duration": next_schedule.estimated_duration,
@@ -3194,24 +3194,24 @@ def get_enrollment_status(course_uuid: str, db: Session = Depends(get_db), curre
 
             # Fallback: no ongoing and no future schedule → show first unscheduled chapter
             if not is_ongoing and not next_schedule:
-                scheduled_chapter_ids = {
-                    s.chapter_id for s in db.query(CourseSchedule.chapter_id).filter(
+                scheduled_lesson_ids = {
+                    s.lesson_id for s in db.query(CourseSchedule.lesson_id).filter(
                         CourseSchedule.batch_list_id == batch.id,
-                        CourseSchedule.chapter_id.isnot(None)
+                        CourseSchedule.lesson_id.isnot(None)
                     ).all()
                 }
-                unscheduled_chapter = db.query(CourseChapter).filter(
-                    CourseChapter.course_id == course_id,
-                    CourseChapter.id.notin_(scheduled_chapter_ids)
-                ).order_by(CourseChapter.chapter_index.asc()).first()
+                unscheduled_chapter = db.query(Lesson).filter(
+                    Lesson.course_id == course_id,
+                    Lesson.id.notin_(scheduled_lesson_ids)
+                ).order_by(Lesson.chapter_index.asc()).first()
                 if unscheduled_chapter:
                     next_chapter_title = unscheduled_chapter.title
                     next_chapter_index = unscheduled_chapter.chapter_index
 
     # Fetch chapters for the course
-    course_chapters = db.query(CourseChapter).filter(
-        CourseChapter.course_id == course_id
-    ).order_by(CourseChapter.chapter_index).all()
+    course_chapters = db.query(Lesson).filter(
+        Lesson.course_id == course_id
+    ).order_by(Lesson.chapter_index).all()
 
     # Fetch chapter → schedule mapping
     chapter_schedule_map = {}
@@ -3220,13 +3220,13 @@ def get_enrollment_status(course_uuid: str, db: Session = Depends(get_db), curre
             CourseSchedule.batch_list_id == batch.id
         ).all()
         for bs in batch_schedules:
-            if bs.chapter_id:
+            if bs.lesson_id:
                 dur_h = 2
                 d = (bs.estimated_duration or '').lower().replace('hours','').replace('hour','').strip()
                 try: dur_h = float(d)
                 except: pass
                 end_time = bs.scheduled_at + timedelta(hours=dur_h) if bs.scheduled_at else None
-                chapter_schedule_map[bs.chapter_id] = {
+                chapter_schedule_map[bs.lesson_id] = {
                     "scheduled_at": bs.scheduled_at.isoformat() if bs.scheduled_at else None,
                     "is_past": end_time < now if end_time else (bs.scheduled_at < now if bs.scheduled_at else False),
                     "is_ongoing": bs.scheduled_at < now and end_time and end_time >= now if bs.scheduled_at else False,
@@ -3331,9 +3331,9 @@ def get_my_library(db: Session = Depends(get_db), current_user: User = Depends(g
         for ind in ind_objs:
             indicators.append({
                 "id": ind.id,
-                "name": ind.indicator_name,
-                "description": ind.indicator_description,
-                "thumbnail": ind.showcase_image,
+                "name": ind.title,
+                "description": ind.description,
+                "thumbnail": ind.image,
             })
 
     # Bots: derive from signal_users instead of purchases
@@ -3355,9 +3355,9 @@ def get_my_library(db: Session = Depends(get_db), current_user: User = Depends(g
                         if access and expiry and expiry >= today:
                             bots.append({
                                 "id": b.id,
-                                "name": b.display_name,
+                                "name": b.title,
                                 "description": b.description,
-                                "thumbnail": b.thumbnail,
+                                "thumbnail": b.image,
                                 "expiry": expiry.isoformat(),
                             })
         finally:
@@ -3371,50 +3371,33 @@ def get_my_library(db: Session = Depends(get_db), current_user: User = Depends(g
 # ==========================================
 @app.get("/clientrequest/bots", response_model=List[BotPublicResponse])
 def get_bots(db: Session = Depends(get_db)):
-    return db.query(Bot).filter(Bot.status == "active").all()
+    return db.query(Bot).filter(Bot.status == "Running").all()
 
 def _build_bot_response(bot: Bot, current_user: Optional[User], db: Session):
     is_purchased = False
     expiry = None
-    api_key = None
-    user_telegram_id = None
     if current_user:
-        model = get_bot_model(bot.token_env)
-        if model:
-            is_purchased, expiry_date = get_user_signal_access(current_user.UserID, model)
-            if expiry_date:
-                expiry = expiry_date.isoformat()
-            # Fetch the API key and telegram_id from signal_users for purchased bots
-            if is_purchased:
-                connection = get_db_connection()
-                if connection:
-                    cursor = connection.cursor(dictionary=True)
-                    try:
-                        cursor.execute(
-                            f"SELECT user_key, telegram_id FROM {DB_TABLE_USERS} WHERE user = %s",
-                            (current_user.UserID,)
-                        )
-                        row = cursor.fetchone()
-                        if row:
-                            api_key = row.get("user_key")
-                            user_telegram_id = row.get("telegram_id")
-                    finally:
-                        cursor.close()
-                        connection.close()
+        member = db.query(BotMember).filter(
+            BotMember.username == current_user.UserID,
+            BotMember.bot_id == bot.bot_id,
+        ).first()
+        if member:
+            is_purchased = True
+            expiry = member.bot_expiry.isoformat() if member.bot_expiry else None
     return {
-        "bot_name": bot.bot_name,
-        "display_name": bot.display_name,
+        "bot_id": bot.bot_id,
+        "title": bot.title,
         "description": bot.description,
         "price": bot.price,
-        "thumbnail": bot.thumbnail,
-        "token_env": bot.token_env,
-        "telegram_id": bot.telegram_id,
+        "image": bot.image,
+        "category": bot.category,
+        "features": bot.features,
+        "exchange": bot.exchange,
+        "apy": bot.apy,
         "status": bot.status,
-        "product_uuid": bot.product_uuid,
+        "token_env": bot.token_env,
         "is_purchased": is_purchased,
         "expiry": expiry,
-        "api_key": api_key,
-        "user_telegram_id": user_telegram_id,
     }
 
 @app.get("/public/bots", response_model=List[BotPublicResponse])
@@ -3424,59 +3407,19 @@ def get_public_bots(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user)
 ):
-    """Public endpoint to fetch available bots with pagination."""
-    bots = db.query(Bot).filter(Bot.status == "active").offset(skip).limit(limit).all()
+    bots = db.query(Bot).filter(Bot.status == "Running").offset(skip).limit(limit).all()
     return [_build_bot_response(b, current_user, db) for b in bots]
 
-@app.get("/public/bots/{product_uuid}", response_model=BotPublicResponse)
+@app.get("/public/bots/{bot_id}", response_model=BotPublicResponse)
 def get_public_bot(
-    product_uuid: str,
+    bot_id: str,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user)
 ):
-    bot = db.query(Bot).filter(Bot.product_uuid == product_uuid, Bot.status == "active").first()
+    bot = db.query(Bot).filter(Bot.bot_id == bot_id, Bot.status == "Running").first()
     if not bot:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
     return _build_bot_response(bot, current_user, db)
-
-@app.get("/api/bot/start-link/{bot_id}")
-def get_bot_start_link(
-    bot_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Returns a Telegram deep link so the user can start the bot with their API key.
-    Format: https://t.me/<bot_username>?start=<api_key>
-    """
-    bot = db.query(Bot).filter(Bot.id == bot_id, Bot.status == "active").first()
-    if not bot:
-        raise HTTPException(status_code=404, detail="Bot not found")
-    if not bot.telegram_id:
-        raise HTTPException(status_code=400, detail="Bot has no Telegram ID configured")
-
-    # Find the user's API key from signal_users
-    connection = get_db_connection()
-    if not connection:
-        raise HTTPException(status_code=500, detail="Database connection error")
-
-    cursor = connection.cursor(dictionary=True)
-    try:
-        cursor.execute(
-            f"SELECT user_key FROM {DB_TABLE_USERS} WHERE user = %s",
-            (current_user.UserID,)
-        )
-        row = cursor.fetchone()
-        if not row or not row.get("user_key"):
-            raise HTTPException(status_code=404, detail="No API key found for this user. Please purchase a bot first.")
-        api_key = row["user_key"]
-    finally:
-        cursor.close()
-        connection.close()
-
-    # Build the deep link
-    deep_link = f"https://t.me/{bot.telegram_id}?start={api_key}"
-    return {"start_link": deep_link, "bot_name": bot.display_name, "api_key": api_key}
 
 @app.get("/api/admin/bots", response_model=List[BotResponse])
 def get_all_bots(db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
@@ -3508,7 +3451,7 @@ def delete_bot(bot_id: int, db: Session = Depends(get_db), current_admin: dict =
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bot not found")
     db.delete(db_bot)
     db.commit()
-    return {"message": f"Bot '{db_bot.bot_name}' deleted successfully"}
+    return {"message": f"Bot '{db_bot.title}' deleted successfully"}
 
 
 # ==========================================
@@ -3570,8 +3513,8 @@ def search_all(q: str = "", db: Session = Depends(get_db)):
     # Search indicators
     indicators = db.query(Indicator).filter(
         or_(
-            Indicator.indicator_name.ilike(search_term),
-            Indicator.indicator_description.ilike(search_term)
+            Indicator.title.ilike(search_term),
+            Indicator.description.ilike(search_term)
         )
     ).all()
     
@@ -3580,19 +3523,19 @@ def search_all(q: str = "", db: Session = Depends(get_db)):
         if key not in seen_ids:
             seen_ids.add(key)
             results.append({
-                "id": ind.product_uuid,
-                "product_uuid": ind.product_uuid,
+                "id": ind.indicator_id,
+                "indicator_id": ind.indicator_id,
                 "section": "indicator",
-                "title": ind.indicator_name,
-                "description": ind.indicator_description,
-                "price": ind.indicator_price,
-                "thumbnail": ind.showcase_image,
+                "title": ind.title,
+                "description": ind.description,
+                "price": ind.price,
+                "thumbnail": ind.image,
             })
     
     # Search bots
     bots = db.query(Bot).filter(
         or_(
-            Bot.display_name.ilike(search_term),
+            Bot.title.ilike(search_term),
             Bot.description.ilike(search_term)
         )
     ).all()
@@ -3602,13 +3545,13 @@ def search_all(q: str = "", db: Session = Depends(get_db)):
         if key not in seen_ids:
             seen_ids.add(key)
             results.append({
-                "id": b.product_uuid,
-                "product_uuid": b.product_uuid,
+                "id": b.bot_id,
+                "bot_id": b.bot_id,
                 "section": "bot",
-                "title": b.display_name,
+                "title": b.title,
                 "description": b.description,
                 "price": b.price,
-                "thumbnail": b.thumbnail,
+                "thumbnail": b.image,
             })
     
     return results
@@ -3618,7 +3561,7 @@ def search_all(q: str = "", db: Session = Depends(get_db)):
 # USER PROFILE API
 # ==========================================
 class UserProfileUpdate(BaseModel):
-    UserName: Optional[str] = None
+    firstname: Optional[str] = None
     tvid: Optional[str] = None
 
 @app.put("/users/me", response_model=UserResponse)
@@ -3628,8 +3571,8 @@ def update_my_profile(
     current_user: User = Depends(get_current_user)
 ):
     """Update the current user's profile (name and TradingView username)."""
-    if update.UserName is not None:
-        current_user.UserName = update.UserName
+    if update.firstname is not None:
+        current_user.firstname = update.firstname
     if update.tvid is not None:
         current_user.tvid = update.tvid
     db.commit()
@@ -3915,9 +3858,9 @@ def dashboard_upcoming_sessions(db: Session = Depends(get_db), current_admin: di
     """Sessions scheduled in the future, sorted by start time ascending."""
     now = datetime.now(timezone.utc)
     rows = (
-        db.query(CourseSchedule, Course.title, CourseChapter.title, BatchList.assigned_to)
+        db.query(CourseSchedule, Course.title, Lesson.title, BatchList.assigned_to)
         .outerjoin(Course, CourseSchedule.course_id == Course.id)
-        .outerjoin(CourseChapter, CourseSchedule.chapter_id == CourseChapter.id)
+        .outerjoin(Lesson, CourseSchedule.lesson_id == Lesson.id)
         .outerjoin(BatchList, CourseSchedule.batch_list_id == BatchList.id)
         .filter(CourseSchedule.scheduled_at != None, CourseSchedule.scheduled_at >= now)
         .order_by(CourseSchedule.scheduled_at.asc())

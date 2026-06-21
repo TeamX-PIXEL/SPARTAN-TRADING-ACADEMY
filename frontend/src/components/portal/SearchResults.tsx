@@ -10,7 +10,7 @@ import { Loader2, Search } from "lucide-react";
 
 interface SearchResultsProps {
   query: string;
-  onOpenProduct: (uuid: string) => void;
+  onOpenProduct: (id: string) => void;
 }
 
 export const SearchResults: React.FC<SearchResultsProps> = ({ query, onOpenProduct }) => {
@@ -85,10 +85,10 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ query, onOpenProdu
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {courses.map(course => (
                   <ProductCard
-                    key={course.uuid}
+                    key={course.id}
                     product={course}
                     type="course"
-                    purchased={purchasedIds.courses.includes(course.uuid)}
+                    purchased={purchasedIds.courses.includes(course.id)}
                     onOpenDetails={onOpenProduct}
                   />
                 ))}
@@ -105,10 +105,10 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ query, onOpenProdu
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {indicators.map(ind => (
                   <ProductCard
-                    key={ind.uuid}
+                    key={ind.id}
                     product={ind}
                     type="indicator"
-                    purchased={purchasedIds.indicators.includes(ind.uuid)}
+                    purchased={purchasedIds.indicators.includes(ind.id)}
                     onOpenDetails={onOpenProduct}
                   />
                 ))}
@@ -125,10 +125,10 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ query, onOpenProdu
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {bots.map(bot => (
                   <ProductCard
-                    key={bot.uuid}
+                    key={bot.id}
                     product={bot}
                     type="bot"
-                    purchased={purchasedIds.bots.includes(bot.uuid)}
+                    purchased={purchasedIds.bots.includes(bot.id)}
                     onOpenDetails={onOpenProduct}
                   />
                 ))}

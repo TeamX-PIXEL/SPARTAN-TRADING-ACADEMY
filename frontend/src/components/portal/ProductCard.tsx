@@ -9,7 +9,7 @@ interface ProductCardProps {
   product: Product;
   type: ProductType;
   purchased: boolean;
-  onOpenDetails: (uuid: string) => void;
+  onOpenDetails: (id: string) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product, type, purchased, onOpenDetails }) => {
@@ -66,7 +66,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, type, purchas
   const handleCartClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     addToCart({
-      id: product.uuid,
+      id: product.id,
       title: product.title,
       price: product.price,
       image: product.image,
@@ -74,13 +74,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, type, purchas
     });
   };
 
-  const isAlreadyInCart = cart.some(c => c.id === product.uuid);
+  const isAlreadyInCart = cart.some(c => c.id === product.id);
 
   return (
     <div
-      onClick={() => onOpenDetails(product.uuid)}
+      onClick={() => onOpenDetails(product.id)}
       className="group relative bg-[#12151c]/40 hover:bg-[#12151c]/90 border border-[#1e222b] hover:border-blue-500/25 rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-blue-500/5 cursor-pointer flex flex-col flex-1 min-w-[280px]"
-      id={`product-card-${product.uuid}`}
+      id={`product-card-${product.id}`}
     >
       {/* Thumbnail Frame */}
       <div className="relative h-44 overflow-hidden bg-[#0c0d0f] shrink-0">
@@ -182,7 +182,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, type, purchas
               type === 'course' && isLiveNow ? (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onOpenDetails(product.uuid); }}
+                  onClick={(e) => { e.stopPropagation(); onOpenDetails(product.id); }}
                   className="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg flex items-center gap-1 group/btn cursor-pointer transition-colors border border-red-500 shadow-md shadow-red-500/10"
                 >
                   <Play className="w-3 h-3 text-white fill-white animate-pulse" />
@@ -191,7 +191,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, type, purchas
               ) : (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); onOpenDetails(product.uuid); }}
+                  onClick={(e) => { e.stopPropagation(); onOpenDetails(product.id); }}
                   className="px-2.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white font-mono text-[10px] rounded-lg transition-colors cursor-pointer"
                 >
                   Manage

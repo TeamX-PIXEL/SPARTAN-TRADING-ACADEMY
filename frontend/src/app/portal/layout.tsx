@@ -54,9 +54,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     };
   }, []);
 
-  const handleOpenProductDetail = (uuid: string) => {
+  const handleOpenProductDetail = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("product", uuid);
+    params.set("product", id);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 

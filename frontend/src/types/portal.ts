@@ -1,7 +1,7 @@
 export type ProductType = 'course' | 'indicator' | 'bot';
 
 export interface BaseProduct {
-  uuid: string;
+  id: string; // course_id / indicator_id / bot_id (string business key from backend)
   title: string;
   description: string;
   longDescription: string;
@@ -15,35 +15,39 @@ export interface Course extends BaseProduct {
   duration: string;
   lecturer: string;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
-  scheduled_at?: string; // ISO string for live startup
-  estimated_duration?: number; // in minutes
+  scheduled_at?: string;
+  estimated_duration?: number;
 }
 
 export interface Indicator extends BaseProduct {
-  scriptType: string; // e.g. "Pine Script (v5)", "MQL4"
-  accuracy?: string; // e.g. "87.4%"
-  timeframe?: string; // e.g. "5m, 1h, Daily"
+  scriptType: string;
+  accuracy?: string;
+  timeframe?: string;
 }
 
 export interface Bot extends BaseProduct {
-  exchange: string; // e.g. "Binance", "Bybit"
-  apy: string; // e.g. "142.5%"
+  exchange: string;
+  apy: string;
   status?: "Running" | "Idle" | "Paused";
-  apiKey?: string; // Shows when purchased
+  apiKey?: string;
 }
 
 export type Product = Course | Indicator | Bot;
 
 export interface UserProfile {
+  id: number;
   name: string;
   email: string;
   avatar: string;
-  tvid: string; // TradingView ID, required for checkout validation!
-  telegramid?: string; // Telegram ID
-  discordid?: string; // Discord Username / ID
+  tvid: string;
+  telegram_user_id?: string;
+  telegram_chat_id?: string;
+  discord_user_id?: string;
+  discord_chat_id?: string;
   firstname?: string;
   lastname?: string;
   username?: string;
+  phone_number?: string;
   notificationsEnabled: boolean;
   marketingEmails: boolean;
   compactMode: boolean;
@@ -51,7 +55,7 @@ export interface UserProfile {
 }
 
 export interface CartItem {
-  id: string; // uuid
+  id: string;
   title: string;
   price: number;
   image: string;
@@ -80,7 +84,7 @@ export interface ToastMessage {
 
 export interface Lesson {
   id: string;
-  courseUuid: string;
+  course_id: string;
   title: string;
   type: 'youtube' | 'zoom' | 'meet';
   link: string;
@@ -92,13 +96,15 @@ export interface Lesson {
 export interface Transaction {
   id: string;
   date: string;
-  productUuid: string;
+  product_id: string;
   productTitle: string;
   productImage: string;
   type: 'Purchase' | 'Renewal' | 'Course Enrollment';
   amount: number;
   status: 'SUCCESSFUL' | 'PENDING';
   tvid: string;
+  product_section: 'Course' | 'Indicator' | 'Bot';
+  method?: string;
 }
 
 export interface AppNotification {
@@ -109,6 +115,6 @@ export interface AppNotification {
   createdAt: string;
   read: boolean;
   linkTo: string;
-  courseUuid?: string;
+  course_id?: string;
 }
 

@@ -11,6 +11,7 @@ import {
   ChevronsRightIcon,
   Edit,
   Gift,
+  IndianRupee,
   Loader2,
   Mail,
   MessageSquare,
@@ -75,7 +76,8 @@ export function EnrolledMembersView({ course }: Props) {
   const members = useAcademyStore((s) => s.members);
   const goAcademy = useAcademyStore((s) => s.goAcademy);
   const addMember = useAcademyStore((s) => s.addMember);
-  const removeMember = useAcademyStore((s) => s.removeMember);
+  const fetchMembers = useAcademyStore((s) => s.fetchMembers);
+  const updateMemberExpiry = useAcademyStore((s) => s.updateMemberExpiry);
 
   const [addOpen, setAddOpen] = React.useState(false);
   const [discordEditOpen, setDiscordEditOpen] = React.useState(false);
@@ -86,13 +88,21 @@ export function EnrolledMembersView({ course }: Props) {
   const [searching, setSearching] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<SearchResult | null>(null);
   const [accessType, setAccessType] = React.useState<AccessType>("free");
+  const [amount, setAmount] = React.useState("");
+  const [method, setMethod] = React.useState("Card");
   const [saving, setSaving] = React.useState(false);
 
   const [pageIndex, setPageIndex] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
 
+  React.useEffect(() => {
+    if (course) {
+      fetchMembers(course.course_id);
+    }
+  }, [course, fetchMembers]);
+
   const courseMembers = React.useMemo(
-    () => (course ? members.filter((m) => m.courseId === course.id) : []),
+    () => (course ? members.filter((m) => m.courseId === course?.id) : []),
     [members, course],
   );
 
@@ -113,7 +123,7 @@ export function EnrolledMembersView({ course }: Props) {
     if (!q) return;
     setSearching(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/users/search?q=${encodeURIComponent(q)}`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/users/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data);
@@ -135,31 +145,29 @@ export function EnrolledMembersView({ course }: Props) {
     setSearchQuery("");
     setSearchResults([]);
     setAccessType("free");
+    setAmount("");
+    setMethod("Card");
     setAddOpen(true);
   }
 
   async function handleAdd() {
     if (!selectedUser || !course) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
-    addMember({
-      name: selectedUser.name,
-      email: selectedUser.email,
-      tvid: selectedUser.tvid || "—",
+    const member = await addMember(course.course_id, {
       username: selectedUser.username,
-      accessType,
-      courseId: course.id,
+      expiry: undefined,
+      amount: accessType === "paid" ? Number(amount) : 0,
+      method: accessType === "paid" ? method : "Free",
     });
     setSaving(false);
     setAddOpen(false);
     setSelectedUser(null);
     setSearchQuery("");
-    toast.success(`${selectedUser.name} was enrolled with ${accessType} access.`);
-  }
-
-  function handleRemove(id: number, name: string) {
-    removeMember(id);
-    toast.success(`${name} was removed from this course.`);
+    if (member) {
+      toast.success(`${selectedUser.name} was enrolled with ${accessType} access.`);
+    } else {
+      toast.error("Failed to enrol member.");
+    }
   }
 
   function handleOpenDiscordEdit(member: Member) {
@@ -170,13 +178,7 @@ export function EnrolledMembersView({ course }: Props) {
 
   async function handleSaveDiscordEdit() {
     if (!discordEditMember) return;
-    useAcademyStore.setState((s) => ({
-      members: s.members.map((m) =>
-        m.id === discordEditMember.id
-          ? { ...m, discordExpiry: discordExpiry || undefined }
-          : m,
-      ),
-    }));
+    await updateMemberExpiry(discordEditMember.id, discordExpiry);
     setDiscordEditOpen(false);
     toast.success(`Discord expiry updated for ${discordEditMember.name}.`);
   }
@@ -266,7 +268,7 @@ export function EnrolledMembersView({ course }: Props) {
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-medium">{m.name}</p>
-                              <p className="text-[11px] text-muted-foreground">@{m.username || m.tvid}</p>
+                              <p className="text-[11px] text-muted-foreground">@{m.username || "—"}</p>
                             </div>
                           </div>
                         </TableCell>
@@ -289,7 +291,7 @@ export function EnrolledMembersView({ course }: Props) {
                         <TableCell className="hidden text-sm md:table-cell">
                           <span className="flex items-center gap-1.5">
                             <Calendar className="size-3.5 text-muted-foreground" />
-                            {m.discordExpiry || "—"}
+                            {formatDate(m.discordExpiry) || "—"}
                           </span>
                         </TableCell>
                         <TableCell className="text-center">
@@ -496,6 +498,41 @@ export function EnrolledMembersView({ course }: Props) {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {selectedUser && accessType === "paid" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="c-amount">Amount (₹)</Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="c-amount"
+                      type="number"
+                      min="0"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Select value={method} onValueChange={setMethod}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Card">Card</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="Crypto">Crypto</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
           </div>

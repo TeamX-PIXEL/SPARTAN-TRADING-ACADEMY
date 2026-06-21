@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { fetchWithAuth, API_BASE_URL } from "@/lib/api-fetch";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -42,7 +43,6 @@ export interface Lesson {
 }
 
 export type IndicatorStatus = "running" | "paused" | "unavailable";
-export type ExpiryPeriod = "7D" | "1M" | "3M" | "6M" | "1Y" | "1L";
 
 export interface Indicator {
   id: number;
@@ -59,9 +59,10 @@ export interface Indicator {
   timeframe: string;
   pine_id?: string | null;
   session_id?: string | null;
-  expiry_period: ExpiryPeriod;
   status: IndicatorStatus;
   purchased_count: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type BotStatus = "Running" | "Idle" | "Paused";
@@ -79,10 +80,10 @@ export interface Bot {
   exchange: string;
   apy: string;
   status: BotStatus;
-  apiKey?: string;
-  telegram_id?: string;
   token_env?: string;
   purchased_count: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type AccessType = "free" | "paid";
@@ -91,8 +92,6 @@ export interface Member {
   id: number;
   name: string;
   email: string;
-  tvid: string;
-  telegramid?: string;
   discordid?: string;
   discordExpiry?: string;
   indicatorExpiry?: string;
@@ -101,10 +100,137 @@ export interface Member {
   lastname?: string;
   username?: string;
   accessType: AccessType;
+  amount?: number;
+  method?: string;
   joinedAt: string;
   courseId?: number;
   indicatorId?: number;
   botId?: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mappers (backend snake_case → frontend camelCase)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function mapCourse(raw: any): Course {
+  return {
+    id: raw.id,
+    course_id: raw.course_id,
+    title: raw.title,
+    description: raw.description,
+    longDescription: raw.long_description ?? "",
+    price: raw.price,
+    image: raw.image ?? "",
+    category: raw.category ?? "General",
+    features: raw.features ?? [],
+    duration_months: raw.duration_months ?? 1,
+    lecturer: raw.lecturer ?? "TBA",
+    difficulty: raw.difficulty ?? "Beginner",
+    scheduled_at: raw.scheduled_at ?? "",
+    purchased_count: raw.purchased_count ?? 0,
+    status: raw.status ?? "upcoming",
+    completed_at: raw.completed_at ?? undefined,
+  };
+}
+
+function mapLesson(raw: any): Lesson {
+  return {
+    id: raw.id,
+    courseId: raw.course_id,
+    title: raw.title,
+    type: raw.type ?? "youtube",
+    link: raw.link ?? "",
+    addedAt: raw.added_at ?? "",
+    duration: raw.duration ?? undefined,
+    startTime: raw.start_time ?? undefined,
+  };
+}
+
+function mapMember(raw: any): Member {
+  return {
+    id: raw.id,
+    username: raw.username ?? "",
+    name: raw.name ?? "",
+    email: raw.email ?? "",
+    firstname: raw.firstname ?? "",
+    lastname: raw.lastname ?? "",
+    discordid: raw.discord_user_id ?? undefined,
+    discordExpiry: raw.expiry ?? undefined,
+    accessType: (raw.access_type as AccessType) ?? "free",
+    joinedAt: raw.joined_at ?? "",
+    courseId: undefined,
+  };
+}
+
+function mapIndicator(raw: any): Indicator {
+  return {
+    id: raw.id,
+    indicator_id: raw.indicator_id,
+    title: raw.title,
+    description: raw.description ?? "",
+    longDescription: raw.long_description ?? "",
+    price: raw.price ?? 0,
+    image: raw.image ?? "",
+    category: raw.category ?? "General",
+    features: raw.features ?? [],
+    scriptType: raw.script_type ?? "Pine Script (v6)",
+    accuracy: raw.accuracy ?? "—",
+    timeframe: raw.timeframe ?? "—",
+    pine_id: raw.pine_id ?? null,
+    session_id: raw.session_id ?? null,
+    status: raw.status ?? "unavailable",
+    purchased_count: raw.purchased_count ?? 0,
+    created_at: raw.created_at ?? null,
+    updated_at: raw.updated_at ?? null,
+  };
+}
+
+function mapIndicatorMember(raw: any): Member {
+  return {
+    id: raw.id,
+    username: raw.username ?? "",
+    name: raw.name ?? "",
+    email: raw.email ?? "",
+    discordid: raw.discord_user_id ?? undefined,
+    indicatorExpiry: raw.expiry ?? undefined,
+    accessType: (raw.access_type as AccessType) ?? "free",
+    joinedAt: raw.joined_at ?? "",
+    indicatorId: undefined,
+  };
+}
+
+function mapBot(raw: any): Bot {
+  return {
+    id: raw.id,
+    bot_id: raw.bot_id,
+    title: raw.title,
+    description: raw.description ?? "",
+    longDescription: raw.long_description ?? "",
+    price: raw.price ?? 0,
+    image: raw.image ?? "",
+    category: raw.category ?? "General",
+    features: raw.features ?? [],
+    exchange: raw.exchange ?? "Binance",
+    apy: raw.apy ?? "—",
+    status: (raw.status as BotStatus) ?? "Idle",
+    token_env: raw.token_env ?? undefined,
+    purchased_count: raw.purchased_count ?? 0,
+    created_at: raw.created_at ?? null,
+    updated_at: raw.updated_at ?? null,
+  };
+}
+
+function mapBotMember(raw: any): Member {
+  return {
+    id: raw.id,
+    username: raw.username ?? "",
+    name: raw.name ?? "",
+    email: raw.email ?? "",
+    botExpiry: raw.expiry ?? undefined,
+    accessType: (raw.access_type as AccessType) ?? "free",
+    joinedAt: raw.joined_at ?? "",
+    botId: undefined,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -134,6 +260,7 @@ interface AcademyState {
   indicators: Indicator[];
   bots: Bot[];
   view: AcademyView;
+  loading: boolean;
 
   setSection: (section: Section) => void;
   setView: (view: AcademyView) => void;
@@ -145,200 +272,49 @@ interface AcademyState {
   goBots: () => void;
   goBotMembers: (botId: number) => void;
 
-  addCourse: (course: Omit<Course, "id" | "purchased_count" | "status">) => void;
-  updateCourse: (id: number, patch: Partial<Course>) => void;
-  removeCourse: (id: number) => void;
-  markCourseCompleted: (id: number) => void;
+  fetchCourses: () => Promise<void>;
+  addCourse: (data: Omit<Course, "id" | "purchased_count" | "status">) => Promise<Course | null>;
+  updateCourse: (courseId: string, patch: Partial<Course>) => Promise<Course | null>;
+  removeCourse: (courseId: string) => Promise<boolean>;
+  markCourseCompleted: (courseId: string) => Promise<Course | null>;
 
-  addLesson: (lesson: Omit<Lesson, "id" | "addedAt">) => void;
-  removeLesson: (id: number) => void;
+  fetchLessons: (courseId: string) => Promise<void>;
+  addLesson: (courseId: string, data: Omit<Lesson, "id" | "addedAt" | "courseId">) => Promise<Lesson | null>;
+  updateLesson: (lessonId: number, patch: Partial<Lesson>) => Promise<Lesson | null>;
+  removeLesson: (lessonId: number) => Promise<boolean>;
 
-  addMember: (member: Omit<Member, "id" | "joinedAt">) => void;
-  removeMember: (id: number) => void;
+  fetchMembers: (courseId: string) => Promise<void>;
+  addMember: (courseId: string, data: { username: string; expiry?: string; amount: number; method: string }) => Promise<Member | null>;
+  updateMemberExpiry: (memberId: number, expiry: string) => Promise<Member | null>;
   updateMember: (id: number, patch: Partial<Member>) => void;
 
-  addIndicator: (indicator: Omit<Indicator, "id" | "purchased_count">) => void;
-  updateIndicator: (id: number, patch: Partial<Indicator>) => void;
-  removeIndicator: (id: number) => void;
+  fetchIndicators: () => Promise<void>;
+  fetchIndicatorMembers: (indicatorId: string) => Promise<void>;
+  addIndicator: (indicator: Omit<Indicator, "id" | "purchased_count">) => Promise<Indicator | null>;
+  updateIndicator: (indicatorId: string, patch: Partial<Indicator>) => Promise<Indicator | null>;
+  removeIndicator: (indicatorId: string) => Promise<boolean>;
+  addIndicatorMember: (indicatorId: string, data: { username: string; expiry?: string; amount: number; method: string }) => Promise<Member | null>;
+  updateIndicatorMemberExpiry: (memberId: number, expiry: string) => Promise<Member | null>;
 
-  addIndicatorMember: (member: Omit<Member, "id" | "joinedAt">) => void;
-  removeIndicatorMember: (id: number) => void;
+  fetchBots: () => Promise<void>;
+  addBot: (data: Omit<Bot, "id" | "purchased_count">) => Promise<Bot | null>;
+  updateBot: (botId: number, patch: Partial<Bot>) => Promise<Bot | null>;
+  removeBot: (botId: number) => Promise<{ ok: boolean; error?: string }>;
 
-  addBot: (bot: Omit<Bot, "id" | "purchased_count">) => void;
-  updateBot: (id: number, patch: Partial<Bot>) => void;
-
-  addBotMember: (member: Omit<Member, "id" | "joinedAt">) => void;
-  removeBotMember: (id: number) => void;
+  fetchBotMembers: (botId: number) => Promise<void>;
+  addBotMember: (botId: number, data: { username: string; expiry?: string; amount: number; method: string }) => Promise<Member | null>;
+  updateBotMemberExpiry: (memberId: number, expiry: string) => Promise<Member | null>;
 }
 
-export const useAcademyStore = create<AcademyState>((set) => ({
+export const useAcademyStore = create<AcademyState>((set, get) => ({
   section: "academy",
-  courses: [
-    {
-      id: 1,
-      course_id: "CRS-101",
-      title: "Price Action Mastery",
-      description: "Master naked chart reading with support/resistance, trendlines, and candlestick patterns.",
-      longDescription: "A comprehensive course on pure price action trading. Learn to read the market without indicators.",
-      price: 4092,
-      image: "",
-      category: "Trading",
-      features: ["8 HD Lessons", "Live Weekly Sessions", "Certificate", "1 Year Free Discord Support"],
-      duration_months: 1,
-      lecturer: "Spartan Academy",
-      difficulty: "Beginner",
-      scheduled_at: "2026-07-01T18:00:00Z",
-      purchased_count: 12,
-      status: "upcoming",
-    },
-    {
-      id: 2,
-      course_id: "CRS-102",
-      title: "ICT Concepts Deep Dive",
-      description: "Liquidity sweeps, order blocks, fair value gaps, and smart money execution.",
-      longDescription: "Deep dive into Inner Circle Trader concepts for institutional-style trading.",
-      price: 8184,
-      image: "",
-      category: "Trading",
-      features: ["12 HD Lessons", "Mentorship Access", "Slack Community", "1 Year Free Discord Support"],
-      duration_months: 2,
-      lecturer: "Spartan Academy",
-      difficulty: "Advanced",
-      scheduled_at: "2026-06-10T18:00:00Z",
-      purchased_count: 8,
-      status: "ongoing",
-    },
-  ],
+  courses: [],
   lessons: [],
-  indicators: [
-    {
-      id: 1,
-      indicator_id: "TVID-201",
-      title: "Spartan Scalper",
-      description: "Real-time scalping indicator with entry/exit signals and risk management overlays.",
-      longDescription: "High-accuracy scalping tool built for M5/M15 timeframes with built-in SL/TP levels.",
-      price: 4092,
-      image: "",
-      category: "Scalping",
-      features: ["Real-time Alerts", "Multi-pair Support", "Custom Dashboard", "1 Year Free Discord Support"],
-      scriptType: "Pine Script (v6)",
-      accuracy: "87%",
-      timeframe: "M5 / M15",
-      expiry_period: "1Y",
-      status: "running",
-      purchased_count: 15,
-    },
-    {
-      id: 2,
-      indicator_id: "TVID-202",
-      title: "Liquidity Tracker",
-      description: "Tracks institutional liquidity zones and potential sweep targets across all timeframes.",
-      longDescription: "Visualize where big money is resting. Identify sweep targets before they happen.",
-      price: 6548,
-      image: "",
-      category: "Analysis",
-      features: ["Multi-TF Heatmap", "Session Overlays", "Alert Integration", "1 Year Free Discord Support"],
-      scriptType: "Pine Script (v6)",
-      accuracy: "92%",
-      timeframe: "M15 / H1",
-      expiry_period: "1Y",
-      status: "running",
-      purchased_count: 9,
-    },
-  ],
-  members: [
-    {
-      id: 1,
-      name: "Algo4X Admin",
-      email: "algo4x@gamil.com",
-      tvid: "TVID-ALGO",
-      telegramid: "@algo4x",
-      firstname: "Algo4X",
-      lastname: "Admin",
-      username: "admin",
-      accessType: "paid",
-      joinedAt: "2026-05-10T12:00:00Z",
-      courseId: 1,
-      discordExpiry: "2027-05-10",
-    },
-    {
-      id: 2,
-      name: "Algo4X Admin",
-      email: "algo4x@gamil.com",
-      tvid: "TVID-ALGO",
-      telegramid: "@algo4x",
-      firstname: "Algo4X",
-      lastname: "Admin",
-      username: "admin",
-      accessType: "paid",
-      joinedAt: "2026-05-12T12:00:00Z",
-      courseId: 2,
-      discordExpiry: "2027-05-12",
-    },
-    {
-      id: 3,
-      name: "Algo4X Admin",
-      email: "algo4x@gamil.com",
-      tvid: "TVID-ALGO",
-      telegramid: "@algo4x",
-      firstname: "Algo4X",
-      lastname: "Admin",
-      username: "admin",
-      accessType: "paid",
-      joinedAt: "2026-05-15T12:00:00Z",
-      indicatorId: 1,
-      discordExpiry: "2027-05-15",
-      indicatorExpiry: "2027-05-15",
-    },
-    {
-      id: 4,
-      name: "Algo4X Admin",
-      email: "algo4x@gamil.com",
-      tvid: "TVID-ALGO",
-      telegramid: "@algo4x",
-      firstname: "Algo4X",
-      lastname: "Admin",
-      username: "admin",
-      accessType: "paid",
-      joinedAt: "2026-05-18T12:00:00Z",
-      indicatorId: 2,
-      discordExpiry: "2027-05-18",
-      indicatorExpiry: "2027-05-18",
-    },
-    {
-      id: 5,
-      name: "Algo4X Admin",
-      email: "algo4x@gamil.com",
-      tvid: "TVID-ALGO",
-      telegramid: "@algo4x",
-      firstname: "Algo4X",
-      lastname: "Admin",
-      username: "admin",
-      accessType: "paid",
-      joinedAt: "2026-05-20T12:00:00Z",
-      botId: 1,
-      discordExpiry: "2027-05-20",
-      botExpiry: "2027-05-20",
-    },
-  ],
-  bots: [
-    {
-      id: 1,
-      bot_id: "BOT-301",
-      title: "Grid Hunter Pro",
-      description: "Automated grid trading bot with adaptive spacing and drawdown protection for volatile pairs.",
-      longDescription: "Grid Hunter Pro dynamically adjusts grid spacing based on ATR volatility, with built-in drawdown protection and trailing stop integration. Supports major crypto pairs on Binance and Bybit.",
-      price: 4092,
-      image: "",
-      category: "Grid",
-      features: ["Adaptive Grid Spacing", "Drawdown Protection", "Telegram Alert Channel", "1 Year Free Discord Support"],
-      exchange: "Binance",
-      apy: "142",
-      status: "Running",
-      purchased_count: 3,
-    },
-  ],
+  indicators: [],
+  members: [],
+  bots: [],
   view: { name: "academy" },
+  loading: false,
 
   setSection: (section) => set({ section, view: { name: section } }),
   setView: (view) => set({ view }),
@@ -350,193 +326,596 @@ export const useAcademyStore = create<AcademyState>((set) => ({
   goBots: () => set({ section: "bots", view: { name: "bots" } }),
   goBotMembers: (botId) => set({ view: { name: "bot-members", botId } }),
 
-  addCourse: (course) =>
-    set((s) => ({
-      courses: [
-        ...s.courses,
-        {
-          ...course,
-          id: Math.max(0, ...s.courses.map((c) => c.id)) + 1,
-          purchased_count: 0,
-          status: "upcoming",
-        },
-      ],
-    })),
+  // ── COURSES ──────────────────────────────────────────────────────────────
 
-  updateCourse: (id, patch) =>
-    set((s) => ({
-      courses: s.courses.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-    })),
+  fetchCourses: async () => {
+    set({ loading: true });
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses?skip=0&limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ courses: (data.courses || []).map(mapCourse), loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch {
+      set({ loading: false });
+    }
+  },
 
-  removeCourse: (id) =>
-    set((s) => ({
-      courses: s.courses.filter((c) => c.id !== id),
-      lessons: s.lessons.filter((l) => l.courseId !== id),
-      members: s.members.filter((m) => m.courseId !== id),
-    })),
+  addCourse: async (courseData) => {
+    const payload = {
+      course_id: courseData.course_id,
+      title: courseData.title,
+      description: courseData.description,
+      long_description: courseData.longDescription || null,
+      price: courseData.price,
+      image: courseData.image || null,
+      category: courseData.category,
+      features: courseData.features,
+      duration_months: courseData.duration_months,
+      lecturer: courseData.lecturer,
+      difficulty: courseData.difficulty,
+      scheduled_at: courseData.scheduled_at || null,
+    };
 
-  markCourseCompleted: (id) =>
-    set((s) => ({
-      courses: s.courses.map((c) =>
-        c.id === id ? { ...c, status: "completed" as CourseStatus, completed_at: new Date().toISOString() } : c,
-      ),
-    })),
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const course = mapCourse(raw);
+        set((s) => ({ courses: [...s.courses, course] }));
+        return course;
+      }
+    } catch {}
+    return null;
+  },
 
-  addLesson: (lesson) =>
-    set((s) => ({
-      lessons: [
-        ...s.lessons,
-        {
-          ...lesson,
-          id: Math.max(0, ...s.lessons.map((l) => l.id)) + 1,
-          addedAt: new Date().toISOString(),
-        },
-      ],
-    })),
+  updateCourse: async (courseId, patch) => {
+    const payload: any = {};
+    if (patch.title !== undefined) payload.title = patch.title;
+    if (patch.description !== undefined) payload.description = patch.description;
+    if (patch.longDescription !== undefined) payload.long_description = patch.longDescription;
+    if (patch.price !== undefined) payload.price = patch.price;
+    if (patch.image !== undefined) payload.image = patch.image;
+    if (patch.category !== undefined) payload.category = patch.category;
+    if (patch.features !== undefined) payload.features = patch.features;
+    if (patch.duration_months !== undefined) payload.duration_months = patch.duration_months;
+    if (patch.lecturer !== undefined) payload.lecturer = patch.lecturer;
+    if (patch.difficulty !== undefined) payload.difficulty = patch.difficulty;
+    if (patch.scheduled_at !== undefined) payload.scheduled_at = patch.scheduled_at;
+    if (patch.completed_at !== undefined) payload.completed_at = patch.completed_at;
 
-  removeLesson: (id) =>
-    set((s) => ({ lessons: s.lessons.filter((l) => l.id !== id) })),
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const course = mapCourse(raw);
+        set((s) => ({
+          courses: s.courses.map((c) => (c.course_id === courseId ? course : c)),
+        }));
+        return course;
+      }
+    } catch {}
+    return null;
+  },
 
-  addMember: (member) =>
-    set((s) => ({
-      members: [
-        ...s.members,
-        {
-          ...member,
-          id: Math.max(0, ...s.members.map((m) => m.id)) + 1,
-          joinedAt: new Date().toISOString(),
-        },
-      ],
-      courses: member.courseId
-        ? s.courses.map((c) =>
-            c.id === member.courseId ? { ...c, purchased_count: c.purchased_count + 1 } : c,
-          )
-        : s.courses,
-    })),
+  removeCourse: async (courseId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((s) => ({
+          courses: s.courses.filter((c) => c.course_id !== courseId),
+        }));
+        return true;
+      }
+    } catch {}
+    return false;
+  },
 
-  removeMember: (id) =>
-    set((s) => {
-      const m = s.members.find((x) => x.id === id);
-      return {
-        members: s.members.filter((x) => x.id !== id),
-        courses: m?.courseId
-          ? s.courses.map((c) =>
-              c.id === m.courseId
-                ? { ...c, purchased_count: Math.max(0, c.purchased_count - 1) }
-                : c,
-            )
-          : s.courses,
-      };
-    }),
+  markCourseCompleted: async (courseId) => {
+    return get().updateCourse(courseId, {
+      completed_at: new Date().toISOString(),
+      status: "completed",
+    });
+  },
+
+  // ── LESSONS ──────────────────────────────────────────────────────────────
+
+  fetchLessons: async (courseId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/lessons`);
+      if (res.ok) {
+        const data = await res.json();
+        set((s) => {
+          const other = s.lessons.filter((l) => l.courseId !== (data[0]?.course_id ?? -1));
+          return { lessons: [...other, ...data.map(mapLesson)] };
+        });
+      }
+    } catch {}
+  },
+
+  addLesson: async (courseId, data) => {
+    const payload = {
+      title: data.title,
+      type: data.type,
+      link: data.link || null,
+      duration: data.duration || null,
+      start_time: data.startTime || null,
+    };
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/lessons`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const lesson = mapLesson(raw);
+        set((s) => ({ lessons: [...s.lessons, lesson] }));
+        return lesson;
+      }
+    } catch {}
+    return null;
+  },
+
+  updateLesson: async (lessonId, patch) => {
+    const payload: any = {};
+    if (patch.title !== undefined) payload.title = patch.title;
+    if (patch.type !== undefined) payload.type = patch.type;
+    if (patch.link !== undefined) payload.link = patch.link;
+    if (patch.duration !== undefined) payload.duration = patch.duration;
+    if (patch.startTime !== undefined) payload.start_time = patch.startTime;
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/lessons/${lessonId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const lesson = mapLesson(raw);
+        set((s) => ({
+          lessons: s.lessons.map((l) => (l.id === lessonId ? lesson : l)),
+        }));
+        return lesson;
+      }
+    } catch {}
+    return null;
+  },
+
+  removeLesson: async (lessonId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/lessons/${lessonId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((s) => ({
+          lessons: s.lessons.filter((l) => l.id !== lessonId),
+        }));
+        return true;
+      }
+    } catch {}
+    return false;
+  },
+
+  // ── MEMBERS ──────────────────────────────────────────────────────────────
+
+  fetchMembers: async (courseId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        const courses = get().courses;
+        const course = courses.find((c) => c.course_id === courseId);
+        const mapped = data.map((m: any) => {
+          const member = mapMember(m);
+          member.courseId = course?.id;
+          return member;
+        });
+        set((s) => {
+          const other = s.members.filter((m) => m.courseId !== course?.id);
+          return { members: [...other, ...mapped] };
+        });
+      }
+    } catch {}
+  },
+
+  addMember: async (courseId, data) => {
+    const payload = {
+      username: data.username,
+      expiry: data.expiry || null,
+      amount: data.amount,
+      method: data.method,
+    };
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const member = mapMember(raw);
+        set((s) => ({
+          members: [...s.members, member],
+        }));
+        return member;
+      }
+    } catch {}
+    return null;
+  },
+
+  updateMemberExpiry: async (memberId, expiry) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiry }),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const member = mapMember(raw);
+        set((s) => ({
+          members: s.members.map((m) => (m.id === memberId ? { ...m, discordExpiry: member.discordExpiry } : m)),
+        }));
+        return member;
+      }
+    } catch {}
+    return null;
+  },
 
   updateMember: (id, patch) =>
     set((s) => ({
       members: s.members.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     })),
 
-  addIndicator: (indicator) =>
-    set((s) => ({
-      indicators: [
-        ...s.indicators,
-        {
-          ...indicator,
-          id: Math.max(0, ...s.indicators.map((i) => i.id)) + 1,
-          purchased_count: 0,
-        },
-      ],
-    })),
+  // ── INDICATORS ────────────────────────────────────────────────────────────
 
-  updateIndicator: (id, patch) =>
-    set((s) => ({
-      indicators: s.indicators.map((i) => (i.id === id ? { ...i, ...patch } : i)),
-    })),
+  fetchIndicators: async () => {
+    set({ loading: true });
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/indicators?skip=0&limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ indicators: (data.indicators || []).map(mapIndicator), loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch {
+      set({ loading: false });
+    }
+  },
 
-  removeIndicator: (id) =>
-    set((s) => ({
-      indicators: s.indicators.filter((i) => i.id !== id),
-      members: s.members.filter((m) => m.indicatorId !== id),
-    })),
+  fetchIndicatorMembers: async (indicatorId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/indicators/${encodeURIComponent(indicatorId)}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = data.map((m: any) => {
+          const member = mapIndicatorMember(m);
+          const indicators = get().indicators;
+          const indicator = indicators.find((i) => i.indicator_id === indicatorId);
+          member.indicatorId = indicator?.id;
+          return member;
+        });
+        set((s) => {
+          const indicator = s.indicators.find((i) => i.indicator_id === indicatorId);
+          const other = s.members.filter((m) => m.indicatorId !== indicator?.id);
+          return { members: [...other, ...mapped] };
+        });
+      }
+    } catch {}
+  },
 
-  addIndicatorMember: (member) =>
-    set((s) => ({
-      members: [
-        ...s.members,
-        {
-          ...member,
-          id: Math.max(0, ...s.members.map((m) => m.id)) + 1,
-          joinedAt: new Date().toISOString(),
-        },
-      ],
-      indicators: member.indicatorId
-        ? s.indicators.map((i) =>
-            i.id === member.indicatorId ? { ...i, purchased_count: i.purchased_count + 1 } : i,
-          )
-        : s.indicators,
-    })),
+  addIndicator: async (indicatorData) => {
+    const payload = {
+      indicator_id: indicatorData.indicator_id,
+      title: indicatorData.title,
+      description: indicatorData.description || null,
+      long_description: indicatorData.longDescription || null,
+      price: indicatorData.price,
+      image: indicatorData.image || null,
+      category: indicatorData.category || "General",
+      features: indicatorData.features,
+      script_type: indicatorData.scriptType || "Pine Script (v6)",
+      accuracy: indicatorData.accuracy || null,
+      timeframe: indicatorData.timeframe || null,
+      pine_id: indicatorData.pine_id || null,
+      session_id: indicatorData.session_id || null,
+      status: indicatorData.status || "unavailable",
+    };
 
-  removeIndicatorMember: (id) =>
-    set((s) => {
-      const m = s.members.find((x) => x.id === id);
-      return {
-        members: s.members.filter((x) => x.id !== id),
-        indicators: m?.indicatorId
-          ? s.indicators.map((i) =>
-              i.id === m.indicatorId
-                ? { ...i, purchased_count: Math.max(0, i.purchased_count - 1) }
-                : i,
-            )
-          : s.indicators,
-      };
-    }),
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/indicators`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const indicator = mapIndicator(raw);
+        set((s) => ({ indicators: [...s.indicators, indicator] }));
+        return indicator;
+      }
+    } catch {}
+    return null;
+  },
 
-  addBot: (bot) =>
-    set((s) => ({
-      bots: [
-        ...s.bots,
-        {
-          ...bot,
-          id: Math.max(0, ...s.bots.map((b) => b.id)) + 1,
-          purchased_count: 0,
-        },
-      ],
-    })),
+  updateIndicator: async (indicatorId, patch) => {
+    const payload: any = {};
+    if (patch.title !== undefined) payload.title = patch.title;
+    if (patch.description !== undefined) payload.description = patch.description;
+    if (patch.longDescription !== undefined) payload.long_description = patch.longDescription;
+    if (patch.price !== undefined) payload.price = patch.price;
+    if (patch.image !== undefined) payload.image = patch.image;
+    if (patch.category !== undefined) payload.category = patch.category;
+    if (patch.features !== undefined) payload.features = patch.features;
+    if (patch.scriptType !== undefined) payload.script_type = patch.scriptType;
+    if (patch.accuracy !== undefined) payload.accuracy = patch.accuracy;
+    if (patch.timeframe !== undefined) payload.timeframe = patch.timeframe;
+    if (patch.pine_id !== undefined) payload.pine_id = patch.pine_id;
+    if (patch.session_id !== undefined) payload.session_id = patch.session_id;
+    if (patch.status !== undefined) payload.status = patch.status;
 
-  updateBot: (id, patch) =>
-    set((s) => ({
-      bots: s.bots.map((b) => (b.id === id ? { ...b, ...patch } : b)),
-    })),
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/indicators/${encodeURIComponent(indicatorId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const indicator = mapIndicator(raw);
+        set((s) => ({
+          indicators: s.indicators.map((i) => (i.indicator_id === indicatorId ? indicator : i)),
+        }));
+        return indicator;
+      }
+    } catch {}
+    return null;
+  },
 
-  addBotMember: (member) =>
-    set((s) => ({
-      members: [
-        ...s.members,
-        {
-          ...member,
-          id: Math.max(0, ...s.members.map((m) => m.id)) + 1,
-          joinedAt: new Date().toISOString(),
-        },
-      ],
-      bots: member.botId
-        ? s.bots.map((b) =>
-            b.id === member.botId ? { ...b, purchased_count: b.purchased_count + 1 } : b,
-          )
-        : s.bots,
-    })),
+  removeIndicator: async (indicatorId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/indicators/${encodeURIComponent(indicatorId)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((s) => ({
+          indicators: s.indicators.filter((i) => i.indicator_id !== indicatorId),
+          members: s.members.filter((m) => {
+            const indicator = s.indicators.find((i) => i.indicator_id === indicatorId);
+            return m.indicatorId !== indicator?.id;
+          }),
+        }));
+        return true;
+      }
+    } catch {}
+    return false;
+  },
 
-  removeBotMember: (id) =>
-    set((s) => {
-      const m = s.members.find((x) => x.id === id);
-      return {
-        members: s.members.filter((x) => x.id !== id),
-        bots: m?.botId
-          ? s.bots.map((b) =>
-              b.id === m.botId
-                ? { ...b, purchased_count: Math.max(0, b.purchased_count - 1) }
-                : b,
-            )
-          : s.bots,
-      };
-    }),
+  addIndicatorMember: async (indicatorId, data) => {
+    const payload = {
+      username: data.username,
+      expiry: data.expiry || null,
+      amount: data.amount,
+      method: data.method,
+    };
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/indicators/${encodeURIComponent(indicatorId)}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const member = mapIndicatorMember(raw);
+        const indicators = get().indicators;
+        const indicator = indicators.find((i) => i.indicator_id === indicatorId);
+        member.indicatorId = indicator?.id;
+        set((s) => ({
+          members: [...s.members, member],
+        }));
+        return member;
+      }
+    } catch {}
+    return null;
+  },
+
+  updateIndicatorMemberExpiry: async (memberId, expiry) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/indicators/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiry: expiry || null }),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const member = mapIndicatorMember(raw);
+        set((s) => ({
+          members: s.members.map((m) => (m.id === memberId ? { ...m, indicatorExpiry: member.indicatorExpiry } : m)),
+        }));
+        return member;
+      }
+    } catch {}
+    return null;
+  },
+
+  // ── BOTS ────────────────────────────────────────────────────────────────
+
+  fetchBots: async () => {
+    set({ loading: true });
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/bots`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ bots: (Array.isArray(data) ? data : []).map(mapBot), loading: false });
+      } else {
+        set({ loading: false });
+      }
+    } catch {
+      set({ loading: false });
+    }
+  },
+
+  addBot: async (data) => {
+    const payload = {
+      bot_id: data.bot_id,
+      title: data.title,
+      description: data.description,
+      long_description: data.longDescription,
+      price: data.price,
+      image: data.image,
+      category: data.category,
+      features: data.features,
+      exchange: data.exchange,
+      apy: data.apy,
+      status: data.status,
+      token_env: data.token_env,
+    };
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/bots`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const bot = mapBot(raw);
+        set((s) => ({ bots: [...s.bots, bot] }));
+        return bot;
+      }
+    } catch {}
+    return null;
+  },
+
+  updateBot: async (botId, patch) => {
+    const payload: Record<string, any> = {};
+    if (patch.title !== undefined) payload.title = patch.title;
+    if (patch.description !== undefined) payload.description = patch.description;
+    if (patch.longDescription !== undefined) payload.long_description = patch.longDescription;
+    if (patch.price !== undefined) payload.price = patch.price;
+    if (patch.image !== undefined) payload.image = patch.image;
+    if (patch.category !== undefined) payload.category = patch.category;
+    if (patch.features !== undefined) payload.features = patch.features;
+    if (patch.exchange !== undefined) payload.exchange = patch.exchange;
+    if (patch.apy !== undefined) payload.apy = patch.apy;
+    if (patch.status !== undefined) payload.status = patch.status;
+    if (patch.token_env !== undefined) payload.token_env = patch.token_env;
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/edit/bot/${botId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const bot = mapBot(raw);
+        set((s) => ({
+          bots: s.bots.map((b) => (b.id === botId ? bot : b)),
+        }));
+        return bot;
+      }
+    } catch {}
+    return null;
+  },
+
+  removeBot: async (botId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/delete/bot/${botId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((s) => ({
+          bots: s.bots.filter((b) => b.id !== botId),
+          members: s.members.filter((m) => m.botId !== botId),
+        }));
+        return { ok: true };
+      }
+      const body = await res.json().catch(() => null);
+      return { ok: false, error: body?.detail ?? "Failed to delete bot." };
+    } catch {
+      return { ok: false, error: "Network error." };
+    }
+  },
+
+  fetchBotMembers: async (botId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/bots/${botId}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (Array.isArray(data) ? data : []).map(mapBotMember);
+        mapped.forEach((m) => { m.botId = botId; });
+        set((s) => {
+          const otherMembers = s.members.filter((m) => m.botId !== botId);
+          return { members: [...otherMembers, ...mapped] };
+        });
+      }
+    } catch {}
+  },
+
+  addBotMember: async (botId, data) => {
+    const payload = {
+      username: data.username,
+      expiry: data.expiry || null,
+      amount: data.amount,
+      method: data.method,
+    };
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/bots/${botId}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const member = mapBotMember(raw);
+        member.botId = botId;
+        set((s) => ({
+          members: [...s.members, member],
+        }));
+        return member;
+      }
+    } catch {}
+    return null;
+  },
+
+  updateBotMemberExpiry: async (memberId, expiry) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/bots/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiry: expiry || null }),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const member = mapBotMember(raw);
+        set((s) => ({
+          members: s.members.map((m) => (m.id === memberId ? { ...m, botExpiry: member.botExpiry } : m)),
+        }));
+        return member;
+      }
+    } catch {}
+    return null;
+  },
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -57,9 +57,10 @@ import { fetchWithAuth, API_BASE_URL } from "@/lib/api-fetch";
 
 interface ClientUser {
   id: number;
-  UserUUID: string;
   UserID: string;
   UserName: string;
+  firstname: string;
+  lastname: string;
   email: string;
   tvid: string;
   phone_number: string;
@@ -69,6 +70,15 @@ interface ClientUser {
   discord_chat_id: string;
   is_verified: boolean;
   created_at: string;
+}
+
+interface EnrolledProduct {
+  member_id: number;
+  product_id: string;
+  title: string;
+  access_type: string;
+  joined_at: string;
+  expiry: string;
 }
 
 export function ClientsManageClient() {
@@ -104,6 +114,10 @@ export function ClientsManageClient() {
 
   const [detailUser, setDetailUser] = React.useState<ClientUser | null>(null);
   const [detailOpen, setDetailOpen] = React.useState(false);
+  const [detailCourses, setDetailCourses] = React.useState<EnrolledProduct[]>([]);
+  const [detailIndicators, setDetailIndicators] = React.useState<EnrolledProduct[]>([]);
+  const [detailBots, setDetailBots] = React.useState<EnrolledProduct[]>([]);
+  const [detailLoading, setDetailLoading] = React.useState(false);
 
   const [addOpen, setAddOpen] = React.useState(false);
   const [addForm, setAddForm] = React.useState({
@@ -122,6 +136,8 @@ export function ClientsManageClient() {
   const [addSaving, setAddSaving] = React.useState(false);
   const [usernameStatus, setUsernameStatus] = React.useState<"idle" | "checking" | "available" | "taken">("idle");
   const [showAddPass, setShowAddPass] = React.useState(false);
+
+  const detailRequestIdRef = React.useRef(0);
 
   React.useEffect(() => {
     async function fetchUsers() {
@@ -170,8 +186,8 @@ export function ClientsManageClient() {
     setEditUser(user);
     setEditForm({
       client_name: user.UserName || "",
-      firstname: user.UserName?.split(" ")[0] || "",
-      lastname: user.UserName?.split(" ").slice(1).join(" ") || "",
+      firstname: user.firstname || "",
+      lastname: user.lastname || "",
       email: user.email || "",
       mobile: user.phone_number || "",
       tvid: user.tvid || "",
@@ -188,19 +204,58 @@ export function ClientsManageClient() {
   async function handleSaveEdit() {
     if (!editUser) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/users/${editUser.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstname: editForm.firstname.trim(),
+          lastname: editForm.lastname.trim(),
+          email: editForm.email.trim(),
+          phone_number: editForm.mobile.trim() || null,
+          tvid: editForm.tvid.trim() || null,
+          telegram_user_id: editForm.telegramid.trim() || null,
+          telegram_chat_id: editForm.telegramchatid.trim() || null,
+          discord_user_id: editForm.discordid.trim() || null,
+          discord_chat_id: editForm.discordchatid.trim() || null,
+          password: editForm.password.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setUsers((prev) => prev.map((u) => (u.id === editUser.id ? { ...u, ...updated } : u)));
+        toast.success(`Client "${editForm.firstname} ${editForm.lastname}" updated successfully.`);
+        setEditOpen(false);
+      } else {
+        const err = await res.json().catch(() => ({ detail: "Update failed" }));
+        toast.error(err.detail || "Failed to update client.");
+      }
+    } catch {
+      toast.error("Failed to update client.");
+    }
     setSaving(false);
-    setEditOpen(false);
-    toast.success(`Client "${editForm.client_name}" updated successfully.`);
   }
 
-  function openDetail(user: ClientUser) {
+  async function openDetail(user: ClientUser) {
     setDetailUser(user);
     setDetailOpen(true);
-  }
-
-  function getClientMembers(userId: number): Member[] {
-    return members.filter((m) => m.id === userId);
+    setDetailLoading(true);
+    setDetailCourses([]);
+    setDetailIndicators([]);
+    setDetailBots([]);
+    const requestId = ++detailRequestIdRef.current;
+    try {
+      const [cRes, iRes, bRes] = await Promise.all([
+        fetchWithAuth(`${API_BASE_URL}/api/admin/users/${user.id}/courses`),
+        fetchWithAuth(`${API_BASE_URL}/api/admin/users/${user.id}/indicators`),
+        fetchWithAuth(`${API_BASE_URL}/api/admin/users/${user.id}/bots`),
+      ]);
+      if (requestId !== detailRequestIdRef.current) return;
+      if (cRes.ok) setDetailCourses(await cRes.json());
+      if (iRes.ok) setDetailIndicators(await iRes.json());
+      if (bRes.ok) setDetailBots(await bRes.json());
+    } catch {}
+    if (requestId === detailRequestIdRef.current) setDetailLoading(false);
   }
 
   async function checkUsernameAvailability(username: string) {
@@ -243,10 +298,70 @@ export function ClientsManageClient() {
 
   async function handleAddClient() {
     setAddSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: addForm.username.trim(),
+          firstname: addForm.firstname.trim(),
+          lastname: addForm.lastname.trim(),
+          email: addForm.email.trim(),
+          phone_number: addForm.mobile.trim() || null,
+          tvid: addForm.tvid.trim() || null,
+          telegram_user_id: addForm.telegramid.trim() || null,
+          telegram_chat_id: addForm.telegramchatid.trim() || null,
+          discord_user_id: addForm.discordid.trim() || null,
+          discord_chat_id: addForm.discordchatid.trim() || null,
+          password: addForm.password.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        const newUser = await res.json();
+        setUsers((prev) => [...prev, newUser]);
+        toast.success(`Client "${addForm.firstname} ${addForm.lastname}" created successfully.`);
+        setAddOpen(false);
+      } else {
+        const err = await res.json().catch(() => ({ detail: "Creation failed" }));
+        toast.error(err.detail || "Failed to create client.");
+      }
+    } catch {
+      toast.error("Failed to create client.");
+    }
     setAddSaving(false);
-    setAddOpen(false);
-    toast.success(`Client "${addForm.firstname} ${addForm.lastname}" created successfully.`);
+  }
+
+  async function handleDetailExpiryEdit(memberId: number, type: "course" | "indicator" | "bot", date: string) {
+    const patchBody = { expiry: date || null };
+    const url =
+      type === "course"
+        ? `${API_BASE_URL}/api/admin/courses/members/${memberId}`
+        : type === "indicator"
+          ? `${API_BASE_URL}/api/admin/indicators/members/${memberId}`
+          : `${API_BASE_URL}/api/admin/bots/members/${memberId}`;
+    try {
+      const res = await fetchWithAuth(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patchBody),
+      });
+      if (res.ok) {
+        toast.success("Expiry date updated.");
+        if (detailUser) {
+          if (type === "course") {
+            setDetailCourses((prev) => prev.map((p) => (p.member_id === memberId ? { ...p, expiry: date } : p)));
+          } else if (type === "indicator") {
+            setDetailIndicators((prev) => prev.map((p) => (p.member_id === memberId ? { ...p, expiry: date } : p)));
+          } else {
+            setDetailBots((prev) => prev.map((p) => (p.member_id === memberId ? { ...p, expiry: date } : p)));
+          }
+        }
+      } else {
+        toast.error("Failed to update expiry.");
+      }
+    } catch {
+      toast.error("Failed to update expiry.");
+    }
   }
 
   return (
@@ -589,98 +704,80 @@ export function ClientsManageClient() {
             </Badge>
           </div>
 
-          <Tabs defaultValue="courses" className="w-full">
-            <TabsList>
-              <TabsTrigger value="courses" className="gap-1.5">
-                <GraduationCap className="size-3.5" />
-                Courses
-                <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                  {detailUser ? members.filter((m) => m.courseId && m.email === detailUser.email).length : 0}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="indicators" className="gap-1.5">
-                <Key className="size-3.5" />
-                Indicators
-                <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                  {detailUser ? members.filter((m) => m.indicatorId && m.email === detailUser.email).length : 0}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="bots" className="gap-1.5">
-                <ShieldCheck className="size-3.5" />
-                Bots
-                <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                  {detailUser ? members.filter((m) => m.botId && m.email === detailUser.email).length : 0}
-                </span>
-              </TabsTrigger>
-            </TabsList>
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Tabs defaultValue="courses" className="w-full">
+              <TabsList>
+                <TabsTrigger value="courses" className="gap-1.5">
+                  <GraduationCap className="size-3.5" />
+                  Courses
+                  <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                    {detailCourses.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="indicators" className="gap-1.5">
+                  <Key className="size-3.5" />
+                  Indicators
+                  <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                    {detailIndicators.length}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="bots" className="gap-1.5">
+                  <ShieldCheck className="size-3.5" />
+                  Bots
+                  <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                    {detailBots.length}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="courses" className="mt-4">
-              <EnrolledProductsTable
-                items={members
-                  .filter((m) => m.courseId && m.email === detailUser?.email)
-                  .map((m) => {
-                    const course = courses.find((c) => c.id === m.courseId);
-                    return {
-                      id: m.id,
-                      name: course?.title || `Course #${m.courseId}`,
-                      idLabel: course?.course_id || "—",
-                      access: m.accessType,
-                      joined: m.joinedAt,
-                      expiry: m.discordExpiry || "",
-                    };
-                  })}
-                type="course"
-                onEditExpiry={(id, date) => {
-                  const member = useAcademyStore.getState().members.find((m) => m.id === id);
-                  if (member) useAcademyStore.getState().updateMember(id, { discordExpiry: date });
-                }}
-              />
-            </TabsContent>
-            <TabsContent value="indicators" className="mt-4">
-              <EnrolledProductsTable
-                items={members
-                  .filter((m) => m.indicatorId && m.email === detailUser?.email)
-                  .map((m) => {
-                    const ind = indicators.find((i) => i.id === m.indicatorId);
-                    return {
-                      id: m.id,
-                      name: ind?.title || `Indicator #${m.indicatorId}`,
-                      idLabel: ind?.indicator_id || "—",
-                      access: m.accessType,
-                      joined: m.joinedAt,
-                      expiry: m.indicatorExpiry || "",
-                    };
-                  })}
-                type="indicator"
-                onEditExpiry={(id, date) => {
-                  const member = useAcademyStore.getState().members.find((m) => m.id === id);
-                  if (member) useAcademyStore.getState().updateMember(id, { indicatorExpiry: date });
-                }}
-              />
-            </TabsContent>
-            <TabsContent value="bots" className="mt-4">
-              <EnrolledProductsTable
-                items={members
-                  .filter((m) => m.botId && m.email === detailUser?.email)
-                  .map((m) => {
-                    const bot = bots.find((b) => b.id === m.botId);
-                    return {
-                      id: m.id,
-                      name: bot?.title || `Bot #${m.botId}`,
-                      idLabel: bot?.bot_id || "—",
-                      access: m.accessType,
-                      joined: m.joinedAt,
-                      expiry: m.botExpiry || "",
-                    };
-                  })}
-                type="bot"
-                onEditExpiry={(id, date) => {
-                  const member = useAcademyStore.getState().members.find((m) => m.id === id);
-                  if (member) useAcademyStore.getState().updateMember(id, { botExpiry: date });
-                }}
-              />
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="courses" className="mt-4">
+                <EnrolledProductsTable
+                  items={detailCourses.map((p) => ({
+                    id: p.member_id,
+                    name: p.title,
+                    idLabel: p.product_id,
+                    access: p.access_type,
+                    joined: p.joined_at,
+                    expiry: p.expiry || "",
+                  }))}
+                  type="course"
+                  onEditExpiry={(id, date) => handleDetailExpiryEdit(id, "course", date)}
+                />
+              </TabsContent>
+              <TabsContent value="indicators" className="mt-4">
+                <EnrolledProductsTable
+                  items={detailIndicators.map((p) => ({
+                    id: p.member_id,
+                    name: p.title,
+                    idLabel: p.product_id,
+                    access: p.access_type,
+                    joined: p.joined_at,
+                    expiry: p.expiry || "",
+                  }))}
+                  type="indicator"
+                  onEditExpiry={(id, date) => handleDetailExpiryEdit(id, "indicator", date)}
+                />
+              </TabsContent>
+              <TabsContent value="bots" className="mt-4">
+                <EnrolledProductsTable
+                  items={detailBots.map((p) => ({
+                    id: p.member_id,
+                    name: p.title,
+                    idLabel: p.product_id,
+                    access: p.access_type,
+                    joined: p.joined_at,
+                    expiry: p.expiry || "",
+                  }))}
+                  type="bot"
+                  onEditExpiry={(id, date) => handleDetailExpiryEdit(id, "bot", date)}
+                />
+              </TabsContent>
+            </Tabs>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -853,6 +950,7 @@ function EnrolledProductsTable({
   const [editExpiryId, setEditExpiryId] = React.useState<number | null>(null);
   const [editExpiryDate, setEditExpiryDate] = React.useState("");
   const [editExpiryCurrent, setEditExpiryCurrent] = React.useState("");
+  const [editSaving, setEditSaving] = React.useState(false);
   const pageSize = 10;
   const pageCount = Math.ceil(items.length / pageSize);
   const paged = items.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
@@ -863,13 +961,13 @@ function EnrolledProductsTable({
     }
   }, [pageIndex, pageCount]);
 
-  function handleSaveExpiry() {
-    if (editExpiryId !== null) {
-      onEditExpiry(editExpiryId, editExpiryDate);
-      toast.success("Expiry date updated.");
-      setEditExpiryId(null);
-      setEditExpiryDate("");
-    }
+  async function handleSaveExpiry() {
+    if (editExpiryId === null) return;
+    setEditSaving(true);
+    await onEditExpiry(editExpiryId, editExpiryDate);
+    setEditSaving(false);
+    setEditExpiryId(null);
+    setEditExpiryDate("");
   }
 
   const expiryLabel = type === "course" ? "Discord Expiry" : type === "indicator" ? "Indicator Expiry" : "Bot Expiry";
@@ -1002,11 +1100,16 @@ function EnrolledProductsTable({
               value={editExpiryDate}
               onChange={(e) => setEditExpiryDate(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">Current: {editExpiryCurrent}</p>
+            {editExpiryCurrent !== "—" && (
+              <p className="text-xs text-muted-foreground">Current: {editExpiryCurrent}</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditExpiryId(null); setEditExpiryDate(""); setEditExpiryCurrent(""); }}>Cancel</Button>
-            <Button onClick={handleSaveExpiry}>Save</Button>
+            <Button onClick={handleSaveExpiry} disabled={editSaving}>
+              {editSaving && <Loader2 className="mr-2 size-4 animate-spin" />}
+              {editSaving ? "Saving..." : "Save"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

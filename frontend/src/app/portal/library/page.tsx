@@ -140,7 +140,7 @@ export const LibraryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // Modal renewal states
-  const [renewingProduct, setRenewingProduct] = useState<{ id: string; title: string; price: number } | null>(null);
+  const [renewingProduct, setRenewingProduct] = useState<{ id: string; title: string; price: number; section: "Indicator" | "Bot" } | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<1 | 12>(1); // 1 Month or 1 Year
 
   // Discord support extension states
@@ -189,8 +189,8 @@ export const LibraryPage: React.FC = () => {
       setDiscordSupportDaysLeft(prev => {
         const next = { ...parsed, ...prev };
         library.courses.forEach(c => {
-          if (next[c.uuid] === undefined) {
-            next[c.uuid] = 365; // 1 year starting days
+          if (next[c.id] === undefined) {
+            next[c.id] = 365; // 1 year starting days
           }
         });
         localStorage.setItem('dealdeck_discord_days', JSON.stringify(next));
@@ -208,7 +208,7 @@ export const LibraryPage: React.FC = () => {
 
       addToast(`Processing $${price} license extension for "${renewingProduct.title}"...`, "info");
       
-      const res = await API.renewProduct(renewingProduct.id, price, durationDays);
+      const res = await API.renewProduct(renewingProduct.id, price, durationDays, renewingProduct.section);
       
       if (res.success) {
         addToast(`Subscription successfully extended! License synced to your account.`, "success");
@@ -231,7 +231,7 @@ export const LibraryPage: React.FC = () => {
       setDiscordSupportDaysLeft(prev => {
         const next = {
           ...prev,
-          [renewingDiscordCourse.uuid]: (prev[renewingDiscordCourse.uuid] || 365) + 365
+          [renewingDiscordCourse.id]: (prev[renewingDiscordCourse.id] || 365) + 365
         };
         localStorage.setItem('dealdeck_discord_days', JSON.stringify(next));
         return next;
@@ -241,13 +241,14 @@ export const LibraryPage: React.FC = () => {
       const simulatedTx: Transaction = {
         id: `TX-${Math.floor(1001 + Math.random() * 8999)}-${Math.floor(10 + Math.random() * 89)}`,
         date: new Date().toISOString(),
-        productUuid: renewingDiscordCourse.uuid,
+        product_id: renewingDiscordCourse.id,
         productTitle: `${renewingDiscordCourse.title} (Discord 1-Yr Support Renewal)`,
         productImage: renewingDiscordCourse.image,
         type: 'Renewal',
         amount: price,
         status: 'SUCCESSFUL',
-        tvid: user?.tvid || 'stoic_trader'
+        tvid: user?.tvid || 'stoic_trader',
+        product_section: 'Course',
       };
       
       // Save persistently in the general transaction list
@@ -300,7 +301,7 @@ export const LibraryPage: React.FC = () => {
         (adminLessonType === 'zoom' || adminLessonType === 'meet') ? adminMeetingStartTime : undefined
       );
       
-      const targetCourse = library.courses.find(c => c.uuid === selectedCourseForAdmin);
+      const targetCourse = library.courses.find(c => c.id === selectedCourseForAdmin);
       const courseTitle = targetCourse ? targetCourse.title : 'Course Masterclass';
 
       addNotification(
@@ -404,7 +405,7 @@ export const LibraryPage: React.FC = () => {
               >
                 <option value="">-- Choose Course --</option>
                 {library.courses.map((c, index) => (
-                  <option key={`${c.uuid}-${index}`} value={c.uuid}>{c.title}</option>
+                  <option key={`${c.id}-${index}`} value={c.id}>{c.title}</option>
                 ))}
               </select>
             </div>
@@ -539,18 +540,18 @@ export const LibraryPage: React.FC = () => {
                   const scheduledDate = course.scheduled_at;
                   const isStarted = scheduledDate ? new Date(scheduledDate) <= new Date() : true;
                   // Filter lessons belonging to this course
-                  const courseLessons = lessons.filter(l => l.courseUuid === course.uuid);
-                  const isExpanded = !!expandedCourses[course.uuid];
+                  const courseLessons = lessons.filter(l => l.course_id === course.id);
+                  const isExpanded = !!expandedCourses[course.id];
                   const toggleExpand = () => {
                     setExpandedCourses(prev => ({
                       ...prev,
-                      [course.uuid]: !prev[course.uuid]
+                      [course.id]: !prev[course.id]
                     }));
                   };
 
                   return (
                     <div 
-                      key={`${course.uuid}-${index}`} 
+                      key={`${course.id}-${index}`} 
                       className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl overflow-hidden shadow-lg transition-transform duration-200 hover:border-neutral-800"
                     >
                       <div className="grid grid-cols-1 lg:grid-cols-12">
@@ -651,7 +652,7 @@ export const LibraryPage: React.FC = () => {
                                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
                                   <span className="text-[10px] uppercase font-mono tracking-widest font-bold text-indigo-400">Premium Discord Support Portal</span>
                                   <span className="text-[8px] px-2 py-0.5 bg-indigo-600 font-mono text-white rounded font-bold uppercase select-none">
-                                    {Math.max(0, discordSupportDaysLeft[course.uuid] ?? 365)} Days Left
+                                    {Math.max(0, discordSupportDaysLeft[course.id] ?? 365)} Days Left
                                   </span>
                                 </div>
                                 <p className="text-[11px] text-neutral-400 leading-relaxed font-sans max-w-xl">
@@ -911,22 +912,22 @@ export const LibraryPage: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                   {library.indicators.map((ind, index) => {
-                    const expiry = expirations[ind.uuid];
+                    const expiry = expirations[ind.id];
                     const isLifetime = !expiry;
                     const daysRemaining = expiry ? Math.ceil((+new Date(expiry) - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
                     const isExpired = expiry && daysRemaining <= 0;
 
-                    const isIndExpanded = !!expandedIndicators[ind.uuid];
+                    const isIndExpanded = !!expandedIndicators[ind.id];
                     const toggleIndExpand = () => {
                       setExpandedIndicators(prev => ({
                         ...prev,
-                        [ind.uuid]: !prev[ind.uuid]
+                        [ind.id]: !prev[ind.id]
                       }));
                     };
 
                     return (
                       <div 
-                        key={`${ind.uuid}-${index}`} 
+                        key={`${ind.id}-${index}`} 
                         className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl overflow-hidden p-5 flex flex-col justify-between space-y-5"
                       >
                         <div className="space-y-4">
@@ -1014,7 +1015,7 @@ export const LibraryPage: React.FC = () => {
 
                             <button
                               type="button"
-                              onClick={() => setRenewingProduct({ id: ind.uuid, title: ind.title, price: ind.price })}
+                              onClick={() => setRenewingProduct({ id: ind.id, title: ind.title, price: ind.price, section: "Indicator" })}
                               className="w-full py-2 bg-[#12151c] hover:bg-blue-600 border border-[#1e222b] hover:border-blue-500 text-neutral-300 hover:text-white rounded-lg text-xs font-mono font-bold uppercase transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <RefreshCw className="w-3.5 h-3.5" />
@@ -1054,22 +1055,22 @@ export const LibraryPage: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                   {library.bots.map((bot, index) => {
-                    const expiry = expirations[bot.uuid];
+                    const expiry = expirations[bot.id];
                     const isLifetime = !expiry;
                     const daysRemaining = expiry ? Math.ceil((+new Date(expiry) - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
                     const isExpired = expiry && daysRemaining <= 0;
 
-                    const isBotExpanded = !!expandedBots[bot.uuid];
+                    const isBotExpanded = !!expandedBots[bot.id];
                     const toggleBotExpand = () => {
                       setExpandedBots(prev => ({
                         ...prev,
-                        [bot.uuid]: !prev[bot.uuid]
+                        [bot.id]: !prev[bot.id]
                       }));
                     };
 
                     return (
                       <div 
-                        key={`${bot.uuid}-${index}`} 
+                        key={`${bot.id}-${index}`} 
                         className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl overflow-hidden p-5 flex flex-col justify-between space-y-5"
                       >
                         <div className="space-y-4">
@@ -1163,7 +1164,7 @@ export const LibraryPage: React.FC = () => {
 
                             <button
                               type="button"
-                              onClick={() => setRenewingProduct({ id: bot.uuid, title: bot.title, price: bot.price })}
+                              onClick={() => setRenewingProduct({ id: bot.id, title: bot.title, price: bot.price, section: "Bot" })}
                               className="w-full py-2 bg-[#12151c] hover:bg-blue-600 border border-[#1e222b] hover:border-blue-500 text-neutral-300 hover:text-white rounded-lg text-xs font-mono font-bold uppercase transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <RefreshCw className="w-3.5 h-3.5" />

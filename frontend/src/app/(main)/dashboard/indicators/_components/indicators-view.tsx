@@ -77,6 +77,7 @@ const STATUS_META: Record<
 
 export function IndicatorsView() {
   const indicators = useAcademyStore((s) => s.indicators);
+  const fetchIndicators = useAcademyStore((s) => s.fetchIndicators);
   const removeIndicator = useAcademyStore((s) => s.removeIndicator);
   const goIndicatorMembers = useAcademyStore((s) => s.goIndicatorMembers);
 
@@ -86,6 +87,10 @@ export function IndicatorsView() {
 
   const [pageIndex, setPageIndex] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
+
+  React.useEffect(() => {
+    fetchIndicators();
+  }, [fetchIndicators]);
 
   const pageCount = Math.ceil(indicators.length / pageSize);
   const pagedIndicators = indicators.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
@@ -101,13 +106,17 @@ export function IndicatorsView() {
     setEditOpen(true);
   }
 
-  function handleRemove(indicator: Indicator) {
+  async function handleRemove(indicator: Indicator) {
     if (indicator.purchased_count > 0) {
       toast.error(`Cannot remove indicator — ${indicator.title} has ${indicator.purchased_count} purchaser(s). Remove members first.`);
       return;
     }
-    removeIndicator(indicator.id);
-    toast.success(`Indicator removed — ${indicator.indicator_id} — ${indicator.title} was deleted.`);
+    const ok = await removeIndicator(indicator.indicator_id);
+    if (ok) {
+      toast.success(`Indicator removed — ${indicator.indicator_id} — ${indicator.title} was deleted.`);
+    } else {
+      toast.error("Failed to remove indicator.");
+    }
   }
 
   return (

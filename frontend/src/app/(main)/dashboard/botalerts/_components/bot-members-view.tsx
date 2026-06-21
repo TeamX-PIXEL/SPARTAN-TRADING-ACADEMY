@@ -12,6 +12,7 @@ import {
   ChevronsRightIcon,
   Edit,
   Gift,
+  IndianRupee,
   Loader2,
   Mail,
   Search,
@@ -74,7 +75,9 @@ interface SearchResult {
 export function BotMembersView({ bot }: Props) {
   const members = useAcademyStore((s) => s.members);
   const goBots = useAcademyStore((s) => s.goBots);
+  const fetchBotMembers = useAcademyStore((s) => s.fetchBotMembers);
   const addBotMember = useAcademyStore((s) => s.addBotMember);
+  const updateBotMemberExpiry = useAcademyStore((s) => s.updateBotMemberExpiry);
 
   const [addOpen, setAddOpen] = React.useState(false);
   const [expiryEditOpen, setExpiryEditOpen] = React.useState(false);
@@ -85,10 +88,16 @@ export function BotMembersView({ bot }: Props) {
   const [searching, setSearching] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<SearchResult | null>(null);
   const [accessType, setAccessType] = React.useState<AccessType>("free");
+  const [amount, setAmount] = React.useState("");
+  const [method, setMethod] = React.useState("Card");
   const [saving, setSaving] = React.useState(false);
 
   const [pageIndex, setPageIndex] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
+
+  React.useEffect(() => {
+    if (bot) fetchBotMembers(bot.id);
+  }, [bot, fetchBotMembers]);
 
   const botMembers = React.useMemo(
     () => (bot ? members.filter((m) => m.botId === bot.id) : []),
@@ -112,7 +121,7 @@ export function BotMembersView({ bot }: Props) {
     if (!q) return;
     setSearching(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/users/search?q=${encodeURIComponent(q)}`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/users/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data);
@@ -134,26 +143,29 @@ export function BotMembersView({ bot }: Props) {
     setSearchQuery("");
     setSearchResults([]);
     setAccessType("free");
+    setAmount("");
+    setMethod("Card");
     setAddOpen(true);
   }
 
   async function handleAdd() {
     if (!selectedUser || !bot) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
-    addBotMember({
-      name: selectedUser.name,
-      email: selectedUser.email,
-      tvid: selectedUser.tvid || "—",
+    const result = await addBotMember(bot.id, {
       username: selectedUser.username,
-      accessType,
-      botId: bot.id,
+      expiry: undefined,
+      amount: accessType === "paid" ? Number(amount) : 0,
+      method: accessType === "paid" ? method : "Free",
     });
     setSaving(false);
-    setAddOpen(false);
-    setSelectedUser(null);
-    setSearchQuery("");
-    toast.success(`${selectedUser.name} was enrolled with ${accessType} access.`);
+    if (result) {
+      setAddOpen(false);
+      setSelectedUser(null);
+      setSearchQuery("");
+      toast.success(`${selectedUser.name} was enrolled with ${accessType} access.`);
+    } else {
+      toast.error("Failed to enrol member.");
+    }
   }
 
   function handleOpenExpiryEdit(member: Member) {
@@ -164,15 +176,13 @@ export function BotMembersView({ bot }: Props) {
 
   async function handleSaveExpiry() {
     if (!expiryEditMember) return;
-    useAcademyStore.setState((s) => ({
-      members: s.members.map((m) =>
-        m.id === expiryEditMember.id
-          ? { ...m, botExpiry: expiryValue || undefined }
-          : m,
-      ),
-    }));
-    setExpiryEditOpen(false);
-    toast.success(`Expiry updated for ${expiryEditMember.name}.`);
+    const result = await updateBotMemberExpiry(expiryEditMember.id, expiryValue || "");
+    if (result) {
+      setExpiryEditOpen(false);
+      toast.success(`Expiry updated for ${expiryEditMember.name}.`);
+    } else {
+      toast.error("Failed to update expiry.");
+    }
   }
 
   if (!bot) {
@@ -237,7 +247,6 @@ export function BotMembersView({ bot }: Props) {
                     <TableHead className="w-[60px] text-center">#</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead className="hidden md:table-cell">Email</TableHead>
-                    <TableHead className="hidden lg:table-cell">Telegram</TableHead>
                     <TableHead className="text-center">Access</TableHead>
                     <TableHead className="hidden md:table-cell">Joined</TableHead>
                     <TableHead className="hidden md:table-cell">Bot Expiry</TableHead>
@@ -258,7 +267,7 @@ export function BotMembersView({ bot }: Props) {
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-medium">{m.name}</p>
-                              <p className="text-[11px] text-muted-foreground">@{m.username || m.tvid}</p>
+                              <p className="text-[11px] text-muted-foreground">@{m.username || "—"}</p>
                             </div>
                           </div>
                         </TableCell>
@@ -267,9 +276,6 @@ export function BotMembersView({ bot }: Props) {
                             <Mail className="size-3.5 text-muted-foreground" />
                             {m.email}
                           </span>
-                        </TableCell>
-                        <TableCell className="hidden font-mono text-[12px] lg:table-cell">
-                          {m.telegramid || "—"}
                         </TableCell>
                         <TableCell className="text-center">
                           {m.accessType === "free" ? (
@@ -287,7 +293,7 @@ export function BotMembersView({ bot }: Props) {
                         <TableCell className="hidden text-sm md:table-cell">
                           <span className="flex items-center gap-1.5">
                             <Calendar className="size-3.5 text-muted-foreground" />
-                            {m.botExpiry || "—"}
+                            {formatDate(m.botExpiry) || "—"}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
@@ -305,7 +311,7 @@ export function BotMembersView({ bot }: Props) {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
+                      <TableCell colSpan={7} className="h-28 text-center text-muted-foreground">
                         No members enrolled yet. Click <span className="font-medium text-foreground">Add Client</span> to grant free access.
                       </TableCell>
                     </TableRow>
@@ -481,6 +487,41 @@ export function BotMembersView({ bot }: Props) {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {selectedUser && accessType === "paid" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="bm-amount">Amount (₹)</Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="bm-amount"
+                      type="number"
+                      min="0"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Select value={method} onValueChange={setMethod}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Card">Card</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="Crypto">Crypto</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
           </div>

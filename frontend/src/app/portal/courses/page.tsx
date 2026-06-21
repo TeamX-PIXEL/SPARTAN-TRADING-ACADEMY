@@ -49,8 +49,8 @@ export const CoursesPage: React.FC = () => {
       // Extra artificial delay to allow skeleton screen presentation
       const res = await API.getCourses(skip, limit);
       setCourses(prev => {
-        const existingUuids = new Set(prev.map(c => c.uuid));
-        const newItems = res.items.filter(c => !existingUuids.has(c.uuid));
+        const existingIds = new Set(prev.map(c => c.id));
+        const newItems = res.items.filter(c => !existingIds.has(c.id));
         return [...prev, ...newItems];
       });
       setSkip(prev => prev + limit);
@@ -85,9 +85,9 @@ export const CoursesPage: React.FC = () => {
     };
   }, [skip, hasMore, isLoadingMore]);
 
-  const openProduct = (uuid: string) => {
+  const openProduct = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set('product', uuid);
+    params.set('product', id);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -136,10 +136,10 @@ export const CoursesPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {courses.map((course) => (
               <ProductCard
-                key={course.uuid}
+                key={course.id}
                 product={course}
                 type="course"
-                purchased={purchasedIds.courses.includes(course.uuid)}
+                purchased={purchasedIds.courses.includes(course.id)}
                 onOpenDetails={openProduct}
               />
             ))}

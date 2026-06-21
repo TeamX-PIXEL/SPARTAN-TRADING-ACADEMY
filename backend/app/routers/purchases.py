@@ -1,56 +1,31 @@
-import os
-import secrets
-import string
 from datetime import datetime, timezone, timedelta, date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
+from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
-from dateutil.relativedelta import relativedelta
 
 from app.database import get_db, get_db_connection
 from app.models import (
-    User, Course, Indicator, Bot, Purchase,
-    IndicatorUser, BatchTemplate, BatchList, CourseWaitlist, CourseSchedule, CourseChapter
+    User, Course, Indicator, Bot, Transaction,
+    CourseMember, IndicatorMember, BotMember,
 )
-from app.schemas import PurchaseCreate
-from app.core.deps import get_current_user
-from app.services.tradingview import tradingview as tv_handler
-from app.services.telegram import DB_TABLE_USERS
+from app.schemas import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest
+from app.core.deps import get_current_user, get_current_admin
 
-router = APIRouter(prefix="", tags=["Purchases"])
+router = APIRouter(prefix="", tags=["Transactions"])
 
 
 # ==========================================
 # HELPERS
 # ==========================================
-def calculate_next_start_date(last_batch: BatchList = None, now: datetime = None):
-    """Calculates the 1st of the month AFTER the previous batch finishes."""
-    if last_batch:
-        finish_date = last_batch.batch_start_date + timedelta(days=last_batch.max_days)
-        next_month = finish_date + relativedelta(months=1, day=1)
-        return next_month
-    else:
-        return now + relativedelta(months=1, day=1)
-
-
-def resolve_pine_id(pine_id_or_alias: str) -> str:
-    """
-    Resolves a pine_id from an alias if it exists in environment variables
-    (prefixed with PINE_), otherwise returns the input as is.
-    """
-    env_key = f"PINE_{pine_id_or_alias}"
-    return os.getenv(env_key, pine_id_or_alias)
-
-
 def parse_expiry_period(expiry_period: str, now: datetime = None):
     """
     Parses an expiry_period string (e.g. '7D', '1M', '3M', '6M', '1Y', '1L')
-    Returns (extension_type, extension_length, expiry_date) where:
-    - extension_type/ext_length are for TradingView's add_access
-    - expiry_date is the calculated DateTime for the indicator_users table
+    Returns (extension_type, extension_length, expiry_date).
     """
+    from dateutil.relativedelta import relativedelta
+
     if not expiry_period:
         expiry_period = "1M"
 
@@ -71,643 +46,761 @@ def parse_expiry_period(expiry_period: str, now: datetime = None):
     elif ext_type == 'Y':
         expiry_date = now + relativedelta(years=ext_length)
     elif ext_type == 'L':
-        expiry_date = None  # Lifetime
+        expiry_date = None
     else:
         expiry_date = now + relativedelta(months=1)
 
     return ext_type, ext_length, expiry_date
 
 
-def generate_api_key():
-    """Generate a unique API key in format XXXX-XXXX-XXXX-XXXX."""
-    while True:
-        parts = [''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4)) for _ in range(4)]
-        key = '-'.join(parts)
-
-        # Ensure uniqueness against signal_users
-        connection = get_db_connection()
-        if connection is None:
-            return key
-        cursor = connection.cursor()
-        try:
-            cursor.execute(f"SELECT 1 FROM {DB_TABLE_USERS} WHERE user_key = %s", (key,))
-            if cursor.fetchone() is None:
-                return key
-        finally:
-            cursor.close()
-            connection.close()
-
-
-def get_bot_model(token_env: str) -> str:
-    """Map a bot's token_env to its model name (Evergreen/Legacy/Alpha)."""
-    mapping = {
-        "EVERGREEN_BOT_TOKEN": "Evergreen",
-        "LEGACY_BOT_TOKEN": "Legacy",
-        "ALPHA_BOT_TOKEN": "Alpha",
-    }
-    return mapping.get(token_env)
-
-
 # ==========================================
-# NEW: THE DEMAND-DRIVEN PURCHASE ENGINE
+# ADMIN: TRANSACTION MANAGEMENT
 # ==========================================
-@router.post("/purchase")
-def create_purchase(
-    purchase: PurchaseCreate,
+SECTION_MAP = {
+    "Course": "academy",
+    "Indicator": "indicators",
+    "Bot": "bot_alerts",
+}
+
+
+@router.get("/api/admin/transactions")
+def list_transactions(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    admin=Depends(get_current_admin),
 ):
-    product_section = purchase.product_section
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-
-    # Resolve product_uuid to integer ID based on section
-    if product_section == 1:
-        course = db.query(Course).filter(Course.product_uuid == purchase.product_uuid).first()
-        if not course:
-            raise HTTPException(status_code=404, detail="Course not found")
-        product_id = course.id
-    elif product_section == 2:
-        indicator = db.query(Indicator).filter(Indicator.product_uuid == purchase.product_uuid).first()
-        if not indicator:
-            raise HTTPException(status_code=404, detail="Indicator not found")
-        product_id = indicator.id
-    elif product_section == 3:
-        bot = db.query(Bot).filter(Bot.product_uuid == purchase.product_uuid).first()
-        if not bot:
-            raise HTTPException(status_code=404, detail="Bot not found")
-        product_id = bot.id
-    else:
-        raise HTTPException(status_code=400, detail="Invalid product section")
-
-    # 1. Record the Purchase (Universal)
-    new_purchase = Purchase(
-        product_section=product_section,
-        product_id=product_id,
-        user_id=current_user.id,
-        cost=purchase.cost,
+    """List all transactions with user info and product titles."""
+    rows = (
+        db.query(Transaction, User)
+        .join(User, Transaction.username == User.UserID, isouter=True)
+        .order_by(Transaction.created_at.desc())
+        .all()
     )
-    db.add(new_purchase)
 
-    # ==========================================
-    # BRANCH 1: COURSE PURCHASE LOGIC
-    # ==========================================
-    if product_section == 1:
-        course_id = product_id
-
-        template = db.query(BatchTemplate).filter(BatchTemplate.course_id == course_id).first()
-        if not template:
-            raise HTTPException(status_code=400, detail="Batch template missing for this course.")
-
-        w_id = template.current_batch if template.current_batch else 1
-
-        # Check if a batch with this ID already exists
-        existing_batch = db.query(BatchList).filter(
-            BatchList.course_id == course_id,
-            BatchList.assigned_to == w_id
-        ).first()
-
-        force_create_batch = False
-
-        if existing_batch:
-            if existing_batch.status == "enrolling":
-                if existing_batch.batch_start_date < now:
-                    # Enrolling but passed -> Close and Move
-                    existing_batch.status = "scheduled"
-
-                    new_id = (template.latest_batch if template.latest_batch else 0) + 1
-                    template.latest_batch = new_id
-                    template.current_batch = new_id
-                    w_id = new_id
-
-                    force_create_batch = True
-                # Else: Enrolling and future -> Do nothing, just join waitlist
-            elif existing_batch.status == "scheduled":
-                # Already scheduled -> Move to next
-                new_id = (template.latest_batch if template.latest_batch else 0) + 1
-                template.latest_batch = new_id
-                template.current_batch = new_id
-                w_id = new_id
-
-                force_create_batch = True
-
-        # 3. Add User to the Waitlist
-        new_waitlist_entry = CourseWaitlist(
-            user_id=current_user.id,
-            course_id=course_id,
-            waitlist_batch_id=w_id
-        )
-        db.add(new_waitlist_entry)
-
-        # INCREMENT THE COURSE PURCHASE COUNT
-        course_to_update = db.query(Course).filter(Course.id == course_id).first()
-        if course_to_update:
-            course_to_update.purchased_count += 1
-            db.add(course_to_update)
-
-        db.flush()
-
-        # 5. BATCH CREATION LOGIC
-        # Case A: We were forced to move to a new ID because the old one closed
-        if force_create_batch:
-            last_batch = db.query(BatchList).filter(BatchList.course_id == course_id).order_by(BatchList.batch_start_date.desc()).first()
-            new_start_date = calculate_next_start_date(last_batch, now)
-
-            new_batch = BatchList(
-                course_id=course_id,
-                min_enroll=template.min_enroll,
-                batch_start_date=new_start_date,
-                max_days=template.no_of_days,
-                assigned_to=w_id,
-                status="enrolling"
-            )
-            db.add(new_batch)
-            db.flush()
-
-            # Ensure template is synced
-            template.current_batch = w_id
-            template.latest_batch = w_id
-
-        # Case B: No batch existed for this ID, check if we hit the threshold to create one
-        elif not existing_batch:
-            current_waitlist_count = db.query(CourseWaitlist).filter(
-                CourseWaitlist.course_id == course_id,
-                CourseWaitlist.waitlist_batch_id == w_id
-            ).count()
-
-            if current_waitlist_count == template.min_enroll:
-                if template.automated_batch_creation:
-                    last_batch = db.query(BatchList).filter(BatchList.course_id == course_id).order_by(BatchList.batch_start_date.desc()).first()
-                    new_start_date = calculate_next_start_date(last_batch, now)
-
-                    new_batch = BatchList(
-                        course_id=course_id,
-                        min_enroll=template.min_enroll,
-                        batch_start_date=new_start_date,
-                        max_days=template.no_of_days,
-                        assigned_to=w_id,
-                        status="enrolling"
-                    )
-                    db.add(new_batch)
-                    db.flush()
-
-                    template.current_batch = w_id
-                    template.latest_batch = w_id
-
-    # ==========================================
-    # BRANCH 2: INDICATOR PURCHASE LOGIC
-    # ==========================================
-    elif product_section == 2:
-        indicator_id = product_id
-
-        # 1. Fetch Indicator Details
-        indicator = db.query(Indicator).filter(Indicator.id == indicator_id).first()
-        if not indicator:
-            raise HTTPException(status_code=404, detail="Indicator not found.")
-
-        # 2. Validation: Does the user have a TradingView ID set?
-        if not current_user.tvid:
-            raise HTTPException(
-                status_code=400,
-                detail="TradingView Username (tvid) missing in your profile. Please update it before purchasing."
-            )
-
-        # 3. Increment Buyers Count
-        indicator.buyers += 1
-        db.add(indicator)
-
-        # 4. TRADINGVIEW ACCESS INTEGRATION
-        ext_type, ext_length, expiry_date = parse_expiry_period(indicator.expiry_period, now)
-
-        try:
-            # We use the session_id and pine_id stored in the Indicator table
-            session_id = indicator.session_id
-            pine_id = indicator.pine_id
-            tv_username = current_user.tvid
-
-            # Step A: Get current access status
-            details = tv_handler.get_access_details(tv_username, pine_id, session_id)
-
-            # Step B: Add/Extend access using indicator's expiry_period
-            tv_result = tv_handler.add_access(
-                access_details=details,
-                extension_type=ext_type,
-                extension_length=ext_length,
-                sessionid=session_id
-            )
-
-            if tv_result.get('status') != 'Success':
-                print(f"TV Error: {tv_result}")
-                raise HTTPException(status_code=500, detail="Purchase recorded, but failed to grant TradingView access.")
-
-        except Exception as e:
-            print(f"TradingView Integration Error: {e}")
-            raise HTTPException(status_code=500, detail=f"Internal error granting TV access: {str(e)}")
-
-        # 5. Add/Update IndicatorUser entry with calculated expiry
-        existing_entry = db.query(IndicatorUser).filter(
-            IndicatorUser.user_id == current_user.id,
-            IndicatorUser.indicator_id == indicator_id
-        ).first()
-
-        if existing_entry:
-            existing_entry.expiry = expiry_date
-            existing_entry.updated_at = datetime.now(timezone.utc)
-            db.add(existing_entry)
-        else:
-            new_entry = IndicatorUser(
-                user_id=current_user.id,
-                indicator_id=indicator_id,
-                expiry=expiry_date
-            )
-            db.add(new_entry)
-
-    # ==========================================
-    # BRANCH 3: BOT PURCHASE LOGIC
-    # ==========================================
-    elif product_section == 3:
-        bot_id = product_id
-        bot = db.query(Bot).filter(Bot.id == bot_id).first()
-        if not bot:
-            raise HTTPException(status_code=404, detail="Bot not found.")
-
-        model = get_bot_model(bot.token_env)
-        if not model:
-            raise HTTPException(status_code=400, detail="Unknown bot model.")
-
-        # Generate a unique API key for the user
-        api_key = generate_api_key()
-
-        # Default expiry: 30 days from now (same as Purchase model default)
-        expiry_date = (now + timedelta(days=30)).date()
-        far_future = date(2099, 12, 31)
-
-        # Upsert into signal_users (MySQL)
-        connection = get_db_connection()
-        if connection is None:
-            raise HTTPException(status_code=500, detail="Database connection error")
-
-        cursor = connection.cursor(dictionary=True)
-        try:
-            cursor.execute(f"SELECT id, user_key FROM {DB_TABLE_USERS} WHERE user = %s", (current_user.UserID,))
-            existing = cursor.fetchone()
-
-            if existing:
-                # Update existing record: enable model access and set expiry
-                # Keep existing user_key if already present
-                update_sql = f"""
-                    UPDATE {DB_TABLE_USERS}
-                    SET {model}_Access = TRUE,
-                        {model}_Expiry = %s,
-                        user_key = COALESCE(user_key, %s)
-                    WHERE user = %s
-                """
-                cursor.execute(update_sql, (expiry_date, api_key, current_user.UserID))
-            else:
-                # Insert new record with all required NOT NULL columns
-                # Evergreen_Expiry and Legacy_Expiry are NOT NULL
-                # Alpha_Expiry is DEFAULT NULL
-                evergreen_exp = expiry_date if model == "Evergreen" else far_future
-                legacy_exp = expiry_date if model == "Legacy" else far_future
-                alpha_exp = expiry_date if model == "Alpha" else None
-
-                cursor.execute(f"""
-                    INSERT INTO {DB_TABLE_USERS} (
-                        user, telegram_id, user_key,
-                        Evergreen_Expiry, Legacy_Expiry, Alpha_Expiry,
-                        Evergreen_Access, Legacy_Access, Alpha_Access
-                    ) VALUES (%s, '', %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    current_user.UserID, api_key,
-                    evergreen_exp, legacy_exp, alpha_exp,
-                    model == "Evergreen", model == "Legacy", model == "Alpha"
-                ))
-
-            connection.commit()
-        except Exception as e:
-            connection.rollback()
-            print(f"Error upserting signal_users for bot purchase: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to add user to signal_users: {str(e)}")
-        finally:
-            cursor.close()
-            connection.close()
-
-    else:
-        raise HTTPException(status_code=400, detail="Invalid product_section provided.")
-
-    db.commit()
-    return {"message": "Purchase successful and TradingView access granted!"}
-
-
-@router.get("/my-purchases")
-def get_my_purchases(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    purchases = db.query(Purchase).filter(Purchase.user_id == current_user.id).all()
-
-    course_ids = [p.product_id for p in purchases if p.product_section == 1]
-    indicator_ids = [p.product_id for p in purchases if p.product_section == 2]
-
-    courses = db.query(Course).filter(Course.id.in_(course_ids)).all() if course_ids else []
-    indicators = db.query(Indicator).filter(Indicator.id.in_(indicator_ids)).all() if indicator_ids else []
-
-    # Bots: derive from signal_users instead of purchases
-    bot_uuids = []
-    connection = get_db_connection()
-    if connection:
-        cursor = connection.cursor(dictionary=True)
-        try:
-            cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE user = %s", (current_user.UserID,))
-            row = cursor.fetchone()
-            if row:
-                today = date.today()
-                all_bots = db.query(Bot).filter(Bot.status == "active").all()
-                for b in all_bots:
-                    model = get_bot_model(b.token_env)
-                    if model:
-                        access = row.get(f"{model}_Access")
-                        expiry = row.get(f"{model}_Expiry")
-                        if access and expiry and expiry >= today:
-                            bot_uuids.append(b.product_uuid)
-        finally:
-            cursor.close()
-            connection.close()
-
-    return {
-        "courses": [c.product_uuid for c in courses],
-        "indicators": [i.product_uuid for i in indicators],
-        "bots": bot_uuids
-    }
-
-
-@router.get("/api/enrollment-status/{course_uuid}")
-def get_enrollment_status(course_uuid: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Returns enrollment status for a specific course."""
-    course = db.query(Course).filter(Course.product_uuid == course_uuid).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found")
-    course_id = course.id
-
-    is_purchased = db.query(Purchase).filter(
-        Purchase.user_id == current_user.id,
-        Purchase.product_id == course_id,
-        Purchase.product_section == 1
-    ).first() is not None
-
-    if not is_purchased:
-        return {"is_purchased": False, "batch_assigned": False, "schedule_assigned": False, "schedule": None}
-
-    # Check if user is in waitlist with a batch assignment
-    waitlist_entry = db.query(CourseWaitlist).filter(
-        CourseWaitlist.user_id == current_user.id,
-        CourseWaitlist.course_id == course_id
-    ).first()
-
-    batch_assigned = False
-    schedule_assigned = False
-    schedule_info = None
-    batch = None
-
-    if waitlist_entry and waitlist_entry.waitlist_batch_id:
-        # Check if a batch exists with this assigned_to value
-        batch = db.query(BatchList).filter(
-            BatchList.course_id == course_id,
-            BatchList.assigned_to == waitlist_entry.waitlist_batch_id
-        ).first()
-
-        if batch:
-            batch_assigned = True
-            now = datetime.now()
-
-            # Find the next upcoming schedule
-            next_schedule = db.query(CourseSchedule).filter(
-                CourseSchedule.batch_list_id == batch.id,
-                CourseSchedule.scheduled_at > now
-            ).order_by(CourseSchedule.scheduled_at.asc()).first()
-
-            # Find the previous schedule (just before now)
-            prev_schedule = db.query(CourseSchedule).filter(
-                CourseSchedule.batch_list_id == batch.id,
-                CourseSchedule.scheduled_at <= now
-            ).order_by(CourseSchedule.scheduled_at.desc()).first()
-
-            is_ongoing = False
-            schedule_info = None
-            next_chapter_title = None
-            next_chapter_index = None
-
-            if prev_schedule:
-                # Parse duration
-                dur_hours = 2
-                if prev_schedule.estimated_duration:
-                    d = prev_schedule.estimated_duration.lower().replace('hours', '').replace('hour', '').strip()
-                    try:
-                        dur_hours = float(d)
-                    except Exception:
-                        pass
-                end_time = prev_schedule.scheduled_at + timedelta(hours=dur_hours)
-                if end_time > now:
-                    is_ongoing = True
-                    # Use the previous (ongoing) schedule as the active one
-                    prev_chapter = db.query(CourseChapter).filter(
-                        CourseChapter.id == prev_schedule.chapter_id
-                    ).first() if prev_schedule.chapter_id else None
-                    schedule_info = {
-                        "scheduled_at": prev_schedule.scheduled_at.isoformat() if prev_schedule.scheduled_at else None,
-                        "estimated_duration": prev_schedule.estimated_duration,
-                        "join_link": prev_schedule.join_link,
-                        "session_type": prev_schedule.session_type,
-                    }
-                    next_chapter_title = prev_chapter.title if prev_chapter else (prev_schedule.custom_chapter_name or None)
-                    next_chapter_index = prev_chapter.chapter_index if prev_chapter else None
-                    schedule_assigned = True
-
-            if not is_ongoing and next_schedule:
-                schedule_assigned = True
-                next_chapter = db.query(CourseChapter).filter(
-                    CourseChapter.id == next_schedule.chapter_id
-                ).first() if next_schedule.chapter_id else None
-                schedule_info = {
-                    "scheduled_at": next_schedule.scheduled_at.isoformat() if next_schedule.scheduled_at else None,
-                    "estimated_duration": next_schedule.estimated_duration,
-                    "join_link": next_schedule.join_link,
-                    "session_type": next_schedule.session_type,
-                }
-                next_chapter_title = next_chapter.title if next_chapter else (next_schedule.custom_chapter_name or None)
-                next_chapter_index = next_chapter.chapter_index if next_chapter else None
-
-            # Fallback: no ongoing and no future schedule -> show first unscheduled chapter
-            if not is_ongoing and not next_schedule:
-                scheduled_chapter_ids = {
-                    s.chapter_id for s in db.query(CourseSchedule.chapter_id).filter(
-                        CourseSchedule.batch_list_id == batch.id,
-                        CourseSchedule.chapter_id.isnot(None)
-                    ).all()
-                }
-                unscheduled_chapter = db.query(CourseChapter).filter(
-                    CourseChapter.course_id == course_id,
-                    CourseChapter.id.notin_(scheduled_chapter_ids)
-                ).order_by(CourseChapter.chapter_index.asc()).first()
-                if unscheduled_chapter:
-                    next_chapter_title = unscheduled_chapter.title
-                    next_chapter_index = unscheduled_chapter.chapter_index
-
-    # Fetch chapters for the course
-    course_chapters = db.query(CourseChapter).filter(
-        CourseChapter.course_id == course_id
-    ).order_by(CourseChapter.chapter_index).all()
-
-    # Fetch chapter -> schedule mapping
-    chapter_schedule_map = {}
-    if batch:
-        batch_schedules = db.query(CourseSchedule).filter(
-            CourseSchedule.batch_list_id == batch.id
-        ).all()
-        for bs in batch_schedules:
-            if bs.chapter_id:
-                dur_h = 2
-                d = (bs.estimated_duration or '').lower().replace('hours', '').replace('hour', '').strip()
-                try:
-                    dur_h = float(d)
-                except Exception:
-                    pass
-                end_time = bs.scheduled_at + timedelta(hours=dur_h) if bs.scheduled_at else None
-                chapter_schedule_map[bs.chapter_id] = {
-                    "scheduled_at": bs.scheduled_at.isoformat() if bs.scheduled_at else None,
-                    "is_past": end_time < now if end_time else (bs.scheduled_at < now if bs.scheduled_at else False),
-                    "is_ongoing": bs.scheduled_at < now and end_time and end_time >= now if bs.scheduled_at else False,
-                }
-
-    chapters_data = []
-    for ch in course_chapters:
-        sch = chapter_schedule_map.get(ch.id, {})
-        chapters_data.append({
-            "id": ch.id,
-            "chapter_index": ch.chapter_index,
-            "title": ch.title,
-            "scheduled_at": sch.get("scheduled_at"),
-            "is_past": sch.get("is_past", False),
-            "is_ongoing": sch.get("is_ongoing", False),
+    results = []
+    for txn, user in rows:
+        item_name = None
+        if txn.product_section == "Course" and txn.course_id:
+            course = db.query(Course).filter(Course.course_id == txn.course_id).first()
+            item_name = course.title if course else None
+        elif txn.product_section == "Indicator" and txn.indicator_id:
+            indicator = db.query(Indicator).filter(Indicator.indicator_id == txn.indicator_id).first()
+            item_name = indicator.title if indicator else None
+        elif txn.product_section == "Bot" and txn.bot_id:
+            bot = db.query(Bot).filter(Bot.bot_id == txn.bot_id).first()
+            item_name = bot.title if bot else None
+
+        customer = f"{user.firstname or ''} {user.lastname or ''}".strip() if user else txn.username
+
+        results.append({
+            "id": str(txn.id),
+            "date": txn.created_at.isoformat() if txn.created_at else None,
+            "section": SECTION_MAP.get(txn.product_section, txn.product_section),
+            "customer": customer or txn.username,
+            "item": item_name,
+            "amount": txn.amount,
+            "method": txn.method,
+            "status": txn.status,
+            "username": txn.username,
+            "product_section": txn.product_section,
+            "course_id": txn.course_id,
+            "indicator_id": txn.indicator_id,
+            "bot_id": txn.bot_id,
+            "expiry": txn.expiry.isoformat() if txn.expiry else None,
+            "created_at": txn.created_at.isoformat() if txn.created_at else None,
         })
 
-    # Calculate progress based on completed chapters (past or ongoing) out of total chapters
-    total_chapters = len(chapters_data)
-    if total_chapters > 0:
-        completed_count = sum(1 for ch in chapters_data if ch["is_past"] or ch["is_ongoing"])
-        progress = round((completed_count / total_chapters) * 100)
+    return results
+
+
+@router.get("/api/admin/transactions/summary")
+def transaction_summary(
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """KPI stats: this/last month revenue & transactions, plus by-section breakdown with top items."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month_start = (month_start - timedelta(days=1)).replace(day=1)
+
+    total = db.query(
+        func.coalesce(func.sum(Transaction.amount), 0.0),
+        func.count(Transaction.id),
+    ).filter(Transaction.status == "completed").first()
+
+    this_month = db.query(
+        func.coalesce(func.sum(Transaction.amount), 0.0),
+        func.count(Transaction.id),
+    ).filter(
+        Transaction.status == "completed",
+        Transaction.created_at >= month_start,
+    ).first()
+
+    last_month = db.query(
+        func.coalesce(func.sum(Transaction.amount), 0.0),
+        func.count(Transaction.id),
+    ).filter(
+        Transaction.status == "completed",
+        Transaction.created_at >= last_month_start,
+        Transaction.created_at < month_start,
+    ).first()
+
+    by_section_raw = (
+        db.query(
+            Transaction.product_section,
+            func.coalesce(func.sum(Transaction.amount), 0.0),
+            func.count(Transaction.id),
+        )
+        .filter(Transaction.status == "completed")
+        .group_by(Transaction.product_section)
+        .all()
+    )
+
+    by_section = []
+    for section_name, revenue, count in by_section_raw:
+        top_item = None
+        top_item_revenue = 0
+
+        product_id_col = None
+        product_table = None
+        if section_name == "Course":
+            product_id_col = Transaction.course_id
+            product_table = Course
+        elif section_name == "Indicator":
+            product_id_col = Transaction.indicator_id
+            product_table = Indicator
+        elif section_name == "Bot":
+            product_id_col = Transaction.bot_id
+            product_table = Bot
+
+        if product_id_col is not None and product_table is not None:
+            item_revenues = (
+                db.query(
+                    product_id_col,
+                    func.coalesce(func.sum(Transaction.amount), 0.0).label("item_rev"),
+                )
+                .filter(
+                    Transaction.status == "completed",
+                    Transaction.product_section == section_name,
+                    product_id_col.isnot(None),
+                )
+                .group_by(product_id_col)
+                .order_by(func.sum(Transaction.amount).desc())
+                .limit(1)
+                .first()
+            )
+            if item_revenues and item_revenues[0]:
+                if section_name == "Course":
+                    c = db.query(Course).filter(Course.course_id == item_revenues[0]).first()
+                    top_item = c.title if c else None
+                elif section_name == "Indicator":
+                    ind = db.query(Indicator).filter(Indicator.indicator_id == item_revenues[0]).first()
+                    top_item = ind.title if ind else None
+                elif section_name == "Bot":
+                    b = db.query(Bot).filter(Bot.bot_id == item_revenues[0]).first()
+                    top_item = b.title if b else None
+
+        by_section.append({
+            "section": SECTION_MAP.get(section_name, section_name),
+            "revenue": float(revenue),
+            "count": count,
+            "topItem": top_item,
+        })
+
+    return {
+        "total_revenue": float(total[0]),
+        "total_transactions": total[1],
+        "this_month_revenue": float(this_month[0]),
+        "this_month_transactions": this_month[1],
+        "last_month_revenue": float(last_month[0]),
+        "last_month_transactions": last_month[1],
+        "by_section": by_section,
+    }
+
+
+@router.get("/api/admin/transactions/monthly-revenue")
+def monthly_revenue(
+    months: int = 12,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Monthly revenue breakdown by section for the last N months. Returns all 12 months (zero-filled)."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    cutoff = now - timedelta(days=months * 31)
+
+    rows = (
+        db.query(
+            extract("year", Transaction.created_at).label("year"),
+            extract("month", Transaction.created_at).label("month"),
+            Transaction.product_section,
+            func.coalesce(func.sum(Transaction.amount), 0.0).label("revenue"),
+        )
+        .filter(
+            Transaction.status == "completed",
+            Transaction.created_at >= cutoff,
+        )
+        .group_by("year", "month", Transaction.product_section)
+        .order_by("year", "month")
+        .all()
+    )
+
+    month_map: dict[str, dict] = {}
+    for r in rows:
+        key = f"{int(r.year)}-{int(r.month):02d}"
+        if key not in month_map:
+            month_map[key] = {"academy": 0.0, "indicators": 0.0, "bot_alerts": 0.0}
+        section_key = SECTION_MAP.get(r.product_section, r.product_section)
+        month_map[key][section_key] = float(r.revenue)
+
+    result = []
+    for i in range(months, 0, -1):
+        # Proper calendar month traversal to avoid drift
+        year = now.year
+        month = now.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        key = f"{year}-{month:02d}"
+        dt = datetime(year, month, 1)
+        label = dt.strftime("%b %y")
+        sections = month_map.get(key, {"academy": 0.0, "indicators": 0.0, "bot_alerts": 0.0})
+        total = sections["academy"] + sections["indicators"] + sections["bot_alerts"]
+        result.append({
+            "monthKey": key,
+            "monthLabel": label,
+            "academy": sections["academy"],
+            "indicators": sections["indicators"],
+            "bot_alerts": sections["bot_alerts"],
+            "total": total,
+        })
+
+    return result
+
+
+@router.post("/api/admin/transactions")
+def create_transaction(
+    payload: TransactionCreate,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Create a transaction and upsert the corresponding member record."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    section = payload.product_section
+
+    # Validate product exists and resolve the string ID
+    product_id = None
+    if section == "Course":
+        course = db.query(Course).filter(Course.course_id == payload.course_id).first()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
+        product_id = course.course_id
+    elif section == "Indicator":
+        indicator = db.query(Indicator).filter(Indicator.indicator_id == payload.indicator_id).first()
+        if not indicator:
+            raise HTTPException(status_code=404, detail="Indicator not found")
+        product_id = indicator.indicator_id
+    elif section == "Bot":
+        bot = db.query(Bot).filter(Bot.bot_id == payload.bot_id).first()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        product_id = bot.bot_id
     else:
-        progress = 0
+        raise HTTPException(status_code=400, detail="Invalid product_section")
+
+    # 1. Insert transaction
+    txn = Transaction(
+        username=payload.username,
+        product_section=section,
+        course_id=payload.course_id if section == "Course" else None,
+        indicator_id=payload.indicator_id if section == "Indicator" else None,
+        bot_id=payload.bot_id if section == "Bot" else None,
+        expiry=payload.expiry,
+        amount=payload.amount,
+        method=payload.method,
+        status=payload.status,
+    )
+    db.add(txn)
+
+    # 2. Upsert member record
+    if section == "Course":
+        existing = db.query(CourseMember).filter(
+            CourseMember.username == payload.username,
+            CourseMember.course_id == payload.course_id,
+        ).first()
+        if existing:
+            existing.expiry = payload.expiry or existing.expiry
+            existing.joined_at = existing.joined_at
+            db.add(existing)
+        else:
+            db.add(CourseMember(
+                username=payload.username,
+                course_id=payload.course_id,
+                expiry=payload.expiry,
+            ))
+
+        # 3. Increment purchased_count
+        course.purchased_count = (course.purchased_count or 0) + 1
+        db.add(course)
+
+    elif section == "Indicator":
+        existing = db.query(IndicatorMember).filter(
+            IndicatorMember.username == payload.username,
+            IndicatorMember.indicator_id == payload.indicator_id,
+        ).first()
+        if existing:
+            existing.expiry = payload.expiry or existing.expiry
+            db.add(existing)
+        else:
+            db.add(IndicatorMember(
+                username=payload.username,
+                indicator_id=payload.indicator_id,
+                expiry=payload.expiry,
+            ))
+
+        indicator.purchased_count = (indicator.purchased_count or 0) + 1
+        db.add(indicator)
+
+    elif section == "Bot":
+        existing = db.query(BotMember).filter(
+            BotMember.username == payload.username,
+            BotMember.bot_id == payload.bot_id,
+        ).first()
+        if existing:
+            existing.expiry = payload.expiry or existing.expiry
+            db.add(existing)
+        else:
+            db.add(BotMember(
+                username=payload.username,
+                bot_id=payload.bot_id,
+                expiry=payload.expiry,
+            ))
+
+        bot.purchased_count = (bot.purchased_count or 0) + 1
+        db.add(bot)
+
+    db.commit()
+    db.refresh(txn)
+    return TransactionResponse.model_validate(txn)
+
+
+# ==========================================
+# USER-FACING: ENROLLMENT STATUS
+# ==========================================
+@router.get("/api/enrollment-status/{course_id}")
+def get_enrollment_status(
+    course_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns enrollment status for a specific course."""
+    course = db.query(Course).filter(Course.course_id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    txn = db.query(Transaction).filter(
+        Transaction.username == current_user.UserID,
+        Transaction.course_id == course_id,
+        Transaction.status == "completed",
+    ).first()
+
+    if not txn:
+        return {"is_purchased": False, "expiry": None, "member_since": None}
+
+    member = db.query(CourseMember).filter(
+        CourseMember.username == current_user.UserID,
+        CourseMember.course_id == course_id,
+    ).first()
 
     return {
         "is_purchased": True,
-        "batch_assigned": batch_assigned,
-        "schedule_assigned": schedule_assigned,
-        "schedule": schedule_info,
-        "is_ongoing": is_ongoing,
-        "next_chapter_title": next_chapter_title,
-        "next_chapter_index": next_chapter_index,
-        "chapters": chapters_data,
-        "progress": progress,
+        "expiry": txn.expiry.isoformat() if txn.expiry else None,
+        "member_since": member.joined_at.isoformat() if member and member.joined_at else None,
     }
 
 
-@router.get("/my-library")
-def get_my_library(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+# ==========================================
+# USER-FACING: MY PURCHASES
+# ==========================================
+@router.get("/my-purchases")
+def get_my_purchases(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """Returns the current user's purchased courses, indicators, and bots."""
-    purchases = db.query(Purchase).filter(Purchase.user_id == current_user.id).all()
+    txns = db.query(Transaction).filter(
+        Transaction.username == current_user.UserID,
+        Transaction.status == "completed",
+    ).all()
 
-    course_ids = [p.product_id for p in purchases if p.product_section == 1]
-    indicator_ids = [p.product_id for p in purchases if p.product_section == 2]
-    bot_ids = [p.product_id for p in purchases if p.product_section == 3]
+    course_ids = [t.course_id for t in txns if t.product_section == "Course" and t.course_id]
+    indicator_ids = [t.indicator_id for t in txns if t.product_section == "Indicator" and t.indicator_id]
+    bot_ids = [t.bot_id for t in txns if t.product_section == "Bot" and t.bot_id]
 
-    # Courses with schedule info, sorted by scheduled_at (unscheduled at bottom)
+    courses = db.query(Course.course_id).filter(Course.course_id.in_(course_ids)).all() if course_ids else []
+    indicators = db.query(Indicator.indicator_id).filter(Indicator.indicator_id.in_(indicator_ids)).all() if indicator_ids else []
+    bots = db.query(Bot.bot_id).filter(Bot.bot_id.in_(bot_ids)).all() if bot_ids else []
+
+    return {
+        "courses": [c[0] for c in courses],
+        "indicators": [i[0] for i in indicators],
+        "bots": [b[0] for b in bots],
+    }
+
+
+# ==========================================
+# USER-FACING: MY LIBRARY
+# ==========================================
+@router.get("/my-library")
+def get_my_library(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns the current user's purchased courses, indicators, and bots with details."""
+    txns = db.query(Transaction).filter(
+        Transaction.username == current_user.UserID,
+        Transaction.status == "completed",
+    ).all()
+
+    course_ids = list({t.course_id for t in txns if t.product_section == "Course" and t.course_id})
+    indicator_ids = list({t.indicator_id for t in txns if t.product_section == "Indicator" and t.indicator_id})
+    bot_ids = list({t.bot_id for t in txns if t.product_section == "Bot" and t.bot_id})
+
     courses = []
     if course_ids:
-        course_objs = db.query(Course).filter(Course.id.in_(course_ids)).all()
+        course_objs = db.query(Course).filter(Course.course_id.in_(course_ids)).all()
         for c in course_objs:
-            now = datetime.now()
-            next_schedule = db.query(CourseSchedule).filter(
-                CourseSchedule.course_id == c.id,
-                CourseSchedule.scheduled_at > now
-            ).order_by(CourseSchedule.scheduled_at.asc()).first()
-
-            prev_schedule = db.query(CourseSchedule).filter(
-                CourseSchedule.course_id == c.id,
-                CourseSchedule.scheduled_at <= now
-            ).order_by(CourseSchedule.scheduled_at.desc()).first()
-
-            is_ongoing = False
-            active_schedule = next_schedule
-
-            if prev_schedule:
-                dur_hours = 2
-                if prev_schedule.estimated_duration:
-                    d = prev_schedule.estimated_duration.lower().replace('hours', '').replace('hour', '').strip()
-                    try:
-                        dur_hours = float(d)
-                    except Exception:
-                        pass
-                end_time = prev_schedule.scheduled_at + timedelta(hours=dur_hours)
-                if end_time > now:
-                    is_ongoing = True
-                    active_schedule = prev_schedule
-
-            schedule_chapter_title = None
-            schedule_chapter_index = None
-            if active_schedule:
-                ch = active_schedule.chapter
-                schedule_chapter_title = ch.title if ch else (active_schedule.custom_chapter_name or None)
-                schedule_chapter_index = ch.chapter_index if ch else None
+            member = db.query(CourseMember).filter(
+                CourseMember.username == current_user.UserID,
+                CourseMember.course_id == c.course_id,
+            ).first()
+            txn = db.query(Transaction).filter(
+                Transaction.username == current_user.UserID,
+                Transaction.course_id == c.course_id,
+            ).order_by(Transaction.created_at.desc()).first()
 
             courses.append({
                 "id": c.id,
+                "course_id": c.course_id,
                 "title": c.title,
                 "description": c.description,
                 "thumbnail": c.course_thumbnail,
-                "scheduled_at": active_schedule.scheduled_at.isoformat() if active_schedule and active_schedule.scheduled_at else None,
-                "estimated_duration": active_schedule.estimated_duration if active_schedule else None,
-                "course_link": active_schedule.join_link if active_schedule else None,
-                "is_ongoing": is_ongoing,
-                "next_chapter_title": schedule_chapter_title,
-                "next_chapter_index": schedule_chapter_index,
+                "expiry": member.expiry.isoformat() if member and member.expiry else (
+                    txn.expiry.isoformat() if txn and txn.expiry else None
+                ),
+                "purchased_at": txn.created_at.isoformat() if txn else None,
             })
-        # Sort: scheduled first (ascending), unscheduled at bottom
-        courses.sort(key=lambda x: (x['scheduled_at'] is None, x['scheduled_at'] or ''))
 
     indicators = []
     if indicator_ids:
-        ind_objs = db.query(Indicator).filter(Indicator.id.in_(indicator_ids)).all()
+        ind_objs = db.query(Indicator).filter(Indicator.indicator_id.in_(indicator_ids)).all()
         for ind in ind_objs:
+            member = db.query(IndicatorMember).filter(
+                IndicatorMember.username == current_user.UserID,
+                IndicatorMember.indicator_id == ind.indicator_id,
+            ).first()
+            txn = db.query(Transaction).filter(
+                Transaction.username == current_user.UserID,
+                Transaction.indicator_id == ind.indicator_id,
+            ).order_by(Transaction.created_at.desc()).first()
+
             indicators.append({
                 "id": ind.id,
-                "name": ind.indicator_name,
-                "description": ind.indicator_description,
-                "thumbnail": ind.showcase_image,
+                "indicator_id": ind.indicator_id,
+                "name": ind.title,
+                "description": ind.description,
+                "thumbnail": ind.image,
+                "expiry": member.expiry.isoformat() if member and member.expiry else (
+                    txn.expiry.isoformat() if txn and txn.expiry else None
+                ),
+                "purchased_at": txn.created_at.isoformat() if txn else None,
             })
 
-    # Bots: derive from signal_users instead of purchases
     bots = []
-    connection = get_db_connection()
-    if connection:
-        cursor = connection.cursor(dictionary=True)
-        try:
-            cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE user = %s", (current_user.UserID,))
-            row = cursor.fetchone()
-            if row:
-                today = date.today()
-                all_bots = db.query(Bot).filter(Bot.status == "active").all()
-                for b in all_bots:
-                    model = get_bot_model(b.token_env)
-                    if model:
-                        access = row.get(f"{model}_Access")
-                        expiry = row.get(f"{model}_Expiry")
-                        if access and expiry and expiry >= today:
-                            bots.append({
-                                "id": b.id,
-                                "name": b.display_name,
-                                "description": b.description,
-                                "thumbnail": b.thumbnail,
-                                "expiry": expiry.isoformat(),
-                            })
-        finally:
-            cursor.close()
-            connection.close()
+    if bot_ids:
+        bot_objs = db.query(Bot).filter(Bot.bot_id.in_(bot_ids)).all()
+        for b in bot_objs:
+            member = db.query(BotMember).filter(
+                BotMember.username == current_user.UserID,
+                BotMember.bot_id == b.bot_id,
+            ).first()
+            txn = db.query(Transaction).filter(
+                Transaction.username == current_user.UserID,
+                Transaction.bot_id == b.bot_id,
+            ).order_by(Transaction.created_at.desc()).first()
+
+            bots.append({
+                "id": b.id,
+                "bot_id": b.bot_id,
+                "name": b.title,
+                "description": b.description,
+                "thumbnail": b.image,
+                "expiry": member.expiry.isoformat() if member and member.expiry else (
+                    txn.expiry.isoformat() if txn and txn.expiry else None
+                ),
+                "purchased_at": txn.created_at.isoformat() if txn else None,
+            })
 
     return {"courses": courses, "indicators": indicators, "bots": bots}
+
+
+# ==========================================
+# USER-FACING: MY TRANSACTIONS
+# ==========================================
+@router.get("/my-transactions")
+def get_my_transactions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns the current user's transaction history with product titles and images."""
+    txns = db.query(Transaction).filter(
+        Transaction.username == current_user.UserID,
+        Transaction.status == "completed",
+    ).order_by(Transaction.created_at.desc()).all()
+
+    results = []
+    for txn in txns:
+        product_title = None
+        product_image = None
+        product_id = None
+
+        if txn.product_section == "Course" and txn.course_id:
+            course = db.query(Course).filter(Course.course_id == txn.course_id).first()
+            if course:
+                product_title = course.title
+                product_image = course.course_thumbnail or course.image
+                product_id = course.course_id
+        elif txn.product_section == "Indicator" and txn.indicator_id:
+            indicator = db.query(Indicator).filter(Indicator.indicator_id == txn.indicator_id).first()
+            if indicator:
+                product_title = indicator.title
+                product_image = indicator.image
+                product_id = indicator.indicator_id
+        elif txn.product_section == "Bot" and txn.bot_id:
+            bot = db.query(Bot).filter(Bot.bot_id == txn.bot_id).first()
+            if bot:
+                product_title = bot.title
+                product_image = bot.image
+                product_id = bot.bot_id
+
+        if not product_title:
+            if txn.product_section == "Course":
+                product_title = txn.course_id
+            elif txn.product_section == "Indicator":
+                product_title = txn.indicator_id
+            elif txn.product_section == "Bot":
+                product_title = txn.bot_id
+
+        results.append({
+            "id": str(txn.id),
+            "date": txn.created_at.isoformat() if txn.created_at else None,
+            "product_id": product_id,
+            "productTitle": product_title,
+            "productImage": product_image or "https://picsum.photos/seed/default/600/400",
+            "type": "Purchase",
+            "amount": txn.amount,
+            "status": "SUCCESSFUL",
+            "tvid": current_user.tvid or "",
+            "product_section": txn.product_section,
+            "method": txn.method,
+        })
+
+    return results
+
+
+# ==========================================
+# USER-FACING: MY EXPIRATIONS
+# ==========================================
+@router.get("/my-expirations")
+def get_my_expirations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Returns expiration dates for indicators and bots the user is enrolled in."""
+    indicator_members = db.query(IndicatorMember).filter(
+        IndicatorMember.username == current_user.UserID,
+    ).all()
+
+    bot_members = db.query(BotMember).filter(
+        BotMember.username == current_user.UserID,
+    ).all()
+
+    expirations = {}
+    for im in indicator_members:
+        if im.expiry:
+            expirations[im.indicator_id] = im.expiry.isoformat()
+
+    for bm in bot_members:
+        if bm.expiry:
+            expirations[bm.bot_id] = bm.expiry.isoformat()
+
+    return expirations
+
+
+# ==========================================
+# USER-FACING: PURCHASE
+# ==========================================
+@router.post("/purchase")
+def purchase_item(
+    payload: PurchaseRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Purchase a course, indicator, or bot."""
+    if not current_user.tvid:
+        raise HTTPException(status_code=400, detail="TVID_REQUIRED")
+
+    section = payload.product_section
+    product_id = payload.product_id
+
+    # Validate product exists
+    if section == "Course":
+        product = db.query(Course).filter(Course.course_id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Course not found")
+    elif section == "Indicator":
+        product = db.query(Indicator).filter(Indicator.indicator_id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Indicator not found")
+    elif section == "Bot":
+        product = db.query(Bot).filter(Bot.bot_id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Bot not found")
+    else:
+        raise HTTPException(status_code=400, detail="Invalid product_section")
+
+    # Check if already purchased
+    existing_query = db.query(Transaction).filter(
+        Transaction.username == current_user.UserID,
+        Transaction.status == "completed",
+    )
+    if section == "Course":
+        existing_query = existing_query.filter(Transaction.course_id == product_id)
+    elif section == "Indicator":
+        existing_query = existing_query.filter(Transaction.indicator_id == product_id)
+    elif section == "Bot":
+        existing_query = existing_query.filter(Transaction.bot_id == product_id)
+
+    if existing_query.first():
+        raise HTTPException(status_code=400, detail="Already purchased")
+
+    # Create transaction
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    expiry_date = now + timedelta(days=30)
+
+    txn = Transaction(
+        username=current_user.UserID,
+        product_section=section,
+        course_id=product_id if section == "Course" else None,
+        indicator_id=product_id if section == "Indicator" else None,
+        bot_id=product_id if section == "Bot" else None,
+        expiry=expiry_date,
+        amount=payload.amount,
+        method=payload.method or "Card",
+        status="completed",
+    )
+    db.add(txn)
+
+    # Upsert member record + increment purchased_count
+    if section == "Course":
+        existing_member = db.query(CourseMember).filter(
+            CourseMember.username == current_user.UserID,
+            CourseMember.course_id == product_id,
+        ).first()
+        if not existing_member:
+            db.add(CourseMember(
+                username=current_user.UserID,
+                course_id=product_id,
+                expiry=expiry_date,
+            ))
+            product.purchased_count = (product.purchased_count or 0) + 1
+
+    elif section == "Indicator":
+        existing_member = db.query(IndicatorMember).filter(
+            IndicatorMember.username == current_user.UserID,
+            IndicatorMember.indicator_id == product_id,
+        ).first()
+        if not existing_member:
+            db.add(IndicatorMember(
+                username=current_user.UserID,
+                indicator_id=product_id,
+                expiry=expiry_date,
+            ))
+            product.purchased_count = (product.purchased_count or 0) + 1
+
+    elif section == "Bot":
+        existing_member = db.query(BotMember).filter(
+            BotMember.username == current_user.UserID,
+            BotMember.bot_id == product_id,
+        ).first()
+        if not existing_member:
+            db.add(BotMember(
+                username=current_user.UserID,
+                bot_id=product_id,
+                expiry=expiry_date,
+            ))
+            product.purchased_count = (product.purchased_count or 0) + 1
+
+    db.commit()
+
+    return {"success": True, "message": "Purchase successful"}
+
+
+# ==========================================
+# USER-FACING: RENEW
+# ==========================================
+@router.post("/renew")
+def renew_product(
+    payload: RenewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Renew a product subscription (Indicator or Bot)."""
+    section = payload.product_section
+    product_id = payload.product_id
+
+    if section not in ("Indicator", "Bot"):
+        raise HTTPException(status_code=400, detail="Renewal only available for Indicators and Bots")
+
+    # Find existing member
+    member = None
+    if section == "Indicator":
+        member = db.query(IndicatorMember).filter(
+            IndicatorMember.username == current_user.UserID,
+            IndicatorMember.indicator_id == product_id,
+        ).first()
+    elif section == "Bot":
+        member = db.query(BotMember).filter(
+            BotMember.username == current_user.UserID,
+            BotMember.bot_id == product_id,
+        ).first()
+
+    if not member:
+        raise HTTPException(status_code=404, detail="Not enrolled in this product")
+
+    # Calculate new expiry: extend from now or current expiry, whichever is later
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    base_date = now
+    if member.expiry and member.expiry > now:
+        base_date = member.expiry
+    new_expiry = base_date + timedelta(days=payload.duration_days)
+
+    # Update member expiry
+    member.expiry = new_expiry
+
+    # Create renewal transaction
+    txn = Transaction(
+        username=current_user.UserID,
+        product_section=section,
+        indicator_id=product_id if section == "Indicator" else None,
+        bot_id=product_id if section == "Bot" else None,
+        expiry=new_expiry,
+        amount=payload.amount,
+        method=payload.method or "Card",
+        status="completed",
+    )
+    db.add(txn)
+    db.commit()
+
+    return {
+        "success": True,
+        "expiration": new_expiry.isoformat(),
+    }

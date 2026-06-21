@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { ImagePlus, Loader2, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -152,7 +153,6 @@ export function IndicatorFormDialog({ open, onOpenChange, indicator }: Indicator
   async function handleSubmit() {
     if (!valid) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
 
     const payload = {
       indicator_id: form.indicator_id.trim().toUpperCase().replace(/\s+/g, "-"),
@@ -168,14 +168,23 @@ export function IndicatorFormDialog({ open, onOpenChange, indicator }: Indicator
       timeframe: form.timeframe.trim() || "—",
       pine_id: form.pine_id.trim() || null,
       session_id: form.session_id.trim() || null,
-      expiry_period: "1M" as const,
       status: form.status,
     };
 
     if (isEdit && indicator) {
-      updateIndicator(indicator.id, payload);
+      const result = await updateIndicator(indicator.indicator_id, payload);
+      if (!result) {
+        toast.error("Failed to update indicator.");
+        setSaving(false);
+        return;
+      }
     } else {
-      addIndicator(payload);
+      const result = await addIndicator(payload);
+      if (!result) {
+        toast.error("Failed to create indicator.");
+        setSaving(false);
+        return;
+      }
     }
     setSaving(false);
     onOpenChange(false);

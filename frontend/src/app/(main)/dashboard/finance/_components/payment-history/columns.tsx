@@ -6,18 +6,13 @@ import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
 
+import { SECTION_LABELS } from "../../_lib/derive-payments";
 import type { Payment } from "./schema";
 import { DataTable } from "./table";
 
 interface PaymentHistoryTableProps {
   data: Payment[];
 }
-
-const SECTION_LABELS: Record<Payment["section"], string> = {
-  academy: "Academy",
-  indicators: "Indicators",
-  bot_alerts: "Bot Alerts",
-};
 
 const SECTION_VARIANTS: Record<Payment["section"], "default" | "secondary" | "outline"> = {
   academy: "default",

@@ -4,14 +4,20 @@ from datetime import datetime
 
 
 class IndicatorBase(BaseModel):
-    indicator_name: str
-    indicator_description: Optional[str] = None
-    indicator_price: float = 0.0
-    showcase_image: Optional[str] = None
-    status: str = Field(default="unavailable", description="Must be: unavailable, paused, or running")
+    indicator_id: str
+    title: str
+    description: Optional[str] = None
+    long_description: Optional[str] = None
+    price: float = 0.0
+    image: Optional[str] = None
+    category: str = "General"
+    features: Optional[list] = None
+    script_type: str = "Pine Script (v6)"
+    accuracy: Optional[str] = None
+    timeframe: Optional[str] = None
     pine_id: Optional[str] = None
     session_id: Optional[str] = None
-    expiry_period: Optional[str] = None
+    status: str = Field(default="unavailable", description="Must be: unavailable, paused, or running")
 
 
 class IndicatorCreate(IndicatorBase):
@@ -19,43 +25,67 @@ class IndicatorCreate(IndicatorBase):
 
 
 class IndicatorUpdate(BaseModel):
-    indicator_name: Optional[str] = None
-    indicator_description: Optional[str] = None
-    indicator_price: Optional[float] = None
-    showcase_image: Optional[str] = None
-    status: Optional[str] = Field(None, description="Must be: unavailable, paused, or running")
+    title: Optional[str] = None
+    description: Optional[str] = None
+    long_description: Optional[str] = None
+    price: Optional[float] = None
+    image: Optional[str] = None
+    category: Optional[str] = None
+    features: Optional[list] = None
+    script_type: Optional[str] = None
+    accuracy: Optional[str] = None
+    timeframe: Optional[str] = None
     pine_id: Optional[str] = None
     session_id: Optional[str] = None
-    expiry_period: Optional[str] = None
+    status: Optional[str] = Field(None, description="Must be: unavailable, paused, or running")
 
 
 class IndicatorResponse(IndicatorBase):
     id: int
-    product_uuid: str
-    buyers: int
+    purchased_count: int = 0
     created_at: datetime
     updated_at: datetime
-    is_purchased: bool = False
-    expiry: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaginatedIndicatorsResponse(BaseModel):
+    indicators: list[IndicatorResponse]
+    total: int
+    skip: int
+    limit: int
 
 
 class IndicatorDeleteResponse(BaseModel):
     message: str = "Indicator deleted successfully"
+    indicator_id: str
 
 
-class IndicatorUserResponse(BaseModel):
-    id: int
-    user_id: int
-    user_name: str
-    email: str
-    indicator_id: int
+class IndicatorMemberCreate(BaseModel):
+    username: str
     expiry: Optional[datetime] = None
-    created_at: datetime
+    amount: float = 0
+    method: Optional[str] = None
+
+
+class IndicatorMemberUpdate(BaseModel):
+    expiry: Optional[datetime] = None
+
+
+class IndicatorMemberResponse(BaseModel):
+    id: int
+    username: str
+    indicator_id: str
+    expiry: Optional[datetime] = None
+    joined_at: datetime
+    name: str = ""
+    email: str = ""
+    discord_user_id: Optional[str] = None
+    access_type: str = "free"
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class AddIndicatorUserRequest(BaseModel):
-    user_id: int
+class AddIndicatorMemberRequest(BaseModel):
+    username: str
+    indicator_id: str

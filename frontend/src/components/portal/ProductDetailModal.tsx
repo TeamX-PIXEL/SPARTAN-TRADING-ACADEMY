@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useApp } from "@/portal/AppContext";
 import { Course, Indicator, Bot, Product } from "@/types/portal";
-import { MOCK_COURSES, MOCK_INDICATORS, MOCK_BOTS } from "@/portal/data";
+import { API } from "@/portal/api";
 import { X, ShoppingCart, Globe, Terminal, Cpu, Sparkles, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -18,73 +18,101 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ onClose 
   const pathname = usePathname();
   const { cart, addToCart, purchasedIds, user } = useApp();
   
-  const productUuid = searchParams.get('product');
+  const productId = searchParams.get('product');
 
   const [product, setProduct] = useState<Product | null>(null);
   const [productType, setProductType] = useState<'course' | 'indicator' | 'bot' | null>(null);
   const [isPurchased, setIsPurchased] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Retrieve matching product from static registries
+  // Fetch product from backend using search
   useEffect(() => {
-    if (!productUuid) {
+    if (!productId) {
       setProduct(null);
+      setIsLoading(false);
       return;
     }
 
-    let foundProduct: Product | null = null;
-    let foundType: 'course' | 'indicator' | 'bot' | null = null;
-    let bought = false;
+    let cancelled = false;
 
-    const course = MOCK_COURSES.find(c => c.uuid === productUuid);
-    if (course) {
-      foundProduct = course;
-      foundType = 'course';
-      bought = purchasedIds.courses.includes(productUuid);
-    } else {
-      const indicator = MOCK_INDICATORS.find(i => i.uuid === productUuid);
-      if (indicator) {
-        foundProduct = indicator;
-        foundType = 'indicator';
-        bought = purchasedIds.indicators.includes(productUuid);
-      } else {
-        const bot = MOCK_BOTS.find(b => b.uuid === productUuid);
-        if (bot) {
-          foundProduct = bot;
-          foundType = 'bot';
-          bought = purchasedIds.bots.includes(productUuid);
-        }
-      }
-    }
-
-    if (foundProduct && foundType) {
-      setProduct(foundProduct);
-      setProductType(foundType);
-      setIsPurchased(bought);
+    const fetchProduct = async () => {
       setIsLoading(true);
+      try {
+        // Use purchasedIds to determine type
+        if (purchasedIds.courses.includes(productId)) {
+          const { items } = await API.getCourses(0, 100);
+          const found = items.find(c => c.id === productId);
+          if (!cancelled && found) {
+            setProduct(found);
+            setProductType('course');
+            setIsPurchased(true);
+          }
+        } else if (purchasedIds.indicators.includes(productId)) {
+          const { items } = await API.getIndicators(0, 100);
+          const found = items.find(i => i.id === productId);
+          if (!cancelled && found) {
+            setProduct(found);
+            setProductType('indicator');
+            setIsPurchased(true);
+          }
+        } else if (purchasedIds.bots.includes(productId)) {
+          const { items } = await API.getBots(0, 100);
+          const found = items.find(b => b.id === productId);
+          if (!cancelled && found) {
+            setProduct(found);
+            setProductType('bot');
+            setIsPurchased(true);
+          }
+        } else {
+          // Not purchased — try all catalogs
+          const [coursesRes, indicatorsRes, botsRes] = await Promise.all([
+            API.getCourses(0, 100),
+            API.getIndicators(0, 100),
+            API.getBots(0, 100),
+          ]);
+          if (cancelled) return;
 
-      const loadProfileData = async () => {
-        try {
-          await new Promise(r => setTimeout(r, 450));
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setIsLoading(false);
+          const foundCourse = coursesRes.items.find(c => c.id === productId);
+          if (foundCourse) {
+            setProduct(foundCourse);
+            setProductType('course');
+            setIsPurchased(false);
+          } else {
+            const foundInd = indicatorsRes.items.find(i => i.id === productId);
+            if (foundInd) {
+              setProduct(foundInd);
+              setProductType('indicator');
+              setIsPurchased(false);
+            } else {
+              const foundBot = botsRes.items.find(b => b.id === productId);
+              if (foundBot) {
+                setProduct(foundBot);
+                setProductType('bot');
+                setIsPurchased(false);
+              } else {
+                setProduct(null);
+                setProductType(null);
+              }
+            }
+          }
         }
-      };
+      } catch (e) {
+        console.error(e);
+        setProduct(null);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
 
-      loadProfileData();
-    } else {
-      setProduct(null);
-      setProductType(null);
-    }
-  }, [productUuid, purchasedIds]);
+    fetchProduct();
+    return () => { cancelled = true; };
+  }, [productId, purchasedIds.courses, purchasedIds.indicators, purchasedIds.bots]);
 
-  if (!productUuid || !product || !productType) return null;
+  if (!productId || !product || !productType) return null;
 
   const handleAddToCart = () => {
     addToCart({
-      id: product.uuid,
+      id: product.id,
       title: product.title,
       price: product.price,
       image: product.image,
@@ -92,7 +120,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ onClose 
     });
   };
 
-  const isAlreadyInCart = cart.some(c => c.id === product.uuid);
+  const isAlreadyInCart = cart.some(c => c.id === product.id);
 
   // Close modal by taking out "product" parameter
   const handleModalClose = () => {

@@ -10,8 +10,10 @@ import {
   ChevronsRightIcon,
   EllipsisVertical,
   Pencil,
+  Trash,
   Users,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
@@ -63,6 +66,8 @@ const STATUS_META: Record<BotStatus, { dot: string; label: string; badge: string
 
 export function BotsView() {
   const bots = useAcademyStore((s) => s.bots);
+  const fetchBots = useAcademyStore((s) => s.fetchBots);
+  const removeBot = useAcademyStore((s) => s.removeBot);
   const goBotMembers = useAcademyStore((s) => s.goBotMembers);
 
   const [createOpen, setCreateOpen] = React.useState(false);
@@ -76,6 +81,10 @@ export function BotsView() {
   const pagedBots = bots.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
 
   React.useEffect(() => {
+    fetchBots();
+  }, [fetchBots]);
+
+  React.useEffect(() => {
     if (pageIndex >= pageCount && pageCount > 0) {
       setPageIndex(pageCount - 1);
     }
@@ -84,6 +93,16 @@ export function BotsView() {
   function openEdit(bot: Bot) {
     setEditing(bot);
     setEditOpen(true);
+  }
+
+  async function handleDelete(bot: Bot) {
+    if (!confirm(`Delete "${bot.title}"? This cannot be undone.`)) return;
+    const result = await removeBot(bot.id);
+    if (result.ok) {
+      toast.success(`"${bot.title}" deleted.`);
+    } else {
+      toast.error(result.error);
+    }
   }
 
   return (
@@ -205,6 +224,11 @@ export function BotsView() {
                                     {bot.purchased_count}
                                   </Badge>
                                 )}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive" onSelect={() => handleDelete(bot)}>
+                                <Trash className="mr-2 size-4" />
+                                Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>

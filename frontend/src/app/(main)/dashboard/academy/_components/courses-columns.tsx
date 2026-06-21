@@ -42,8 +42,8 @@ const ActionCell = ({ row }: { row: { original: CourseRow } }) => {
   const [description, setDescription] = React.useState(row.original.description || "");
   const [price, setPrice] = React.useState(row.original.price?.toString() || "0");
 
-  // Always use the primary integer ID for API calls to FastAPI
-  const primaryId = row.original.id;
+  // Always use the course_id string for API calls to FastAPI
+  const primaryId = row.original.course_id ?? row.original.id;
 
   async function handleSave() {
     setIsSaving(true);

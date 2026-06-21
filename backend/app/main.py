@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.database import Base, engine
-from app.routers import auth, bots, courses, users, indicators, purchases, webhooks, admin, progress, dashboard, miniapp, search, uploads, tradingview_api, static
+from app.routers import auth, bots, courses, users, indicators, purchases, webhooks, admin, dashboard, miniapp, search, uploads, tradingview_api, static
 from app.config import get_settings
 
 settings = get_settings()
@@ -37,13 +37,21 @@ async def _ensure_raw_mysql_tables():
 
     cursor = connection.cursor(dictionary=True)
     try:
-        # Check if signal_users table exists
+        # Check if evergreen_bot_alert_filter table exists
         cursor.execute("""
             SELECT COUNT(*) as cnt FROM information_schema.tables
             WHERE table_schema = DATABASE()
-            AND table_name = 'signal_users'
+            AND table_name = 'evergreen_bot_alert_filter'
         """)
-        signal_users_exists = cursor.fetchone()['cnt'] > 0
+        evergreen_exists = cursor.fetchone()['cnt'] > 0
+
+        # Check if legacy_bot_alert_filter table exists
+        cursor.execute("""
+            SELECT COUNT(*) as cnt FROM information_schema.tables
+            WHERE table_schema = DATABASE()
+            AND table_name = 'legacy_bot_alert_filter'
+        """)
+        legacy_exists = cursor.fetchone()['cnt'] > 0
 
         # Check if admin_users table exists
         cursor.execute("""
@@ -53,8 +61,8 @@ async def _ensure_raw_mysql_tables():
         """)
         admin_users_exists = cursor.fetchone()['cnt'] > 0
 
-        if signal_users_exists and admin_users_exists:
-            print("Raw MySQL tables already exist (signal_users, admin_users). Skipping schema creation.")
+        if evergreen_exists and legacy_exists and admin_users_exists:
+            print("Raw MySQL tables already exist (evergreen_bot_alert_filter, legacy_bot_alert_filter, admin_users). Skipping schema creation.")
             return
 
         # One or both tables are missing -> run schema.sql
@@ -120,6 +128,7 @@ app.include_router(users.router)
 
 # Indicator routes - NO /api prefix (matching original: /add/indicator, /fetch/indicators, etc.)
 app.include_router(indicators.router)
+app.include_router(indicators.public_router)
 
 # Purchase routes - NO /api prefix (matching original: /purchase)
 app.include_router(purchases.router)
@@ -129,9 +138,6 @@ app.include_router(webhooks.router)
 
 # Admin routes - /api prefix
 app.include_router(admin.router, prefix="/api")
-
-# Progress routes - NO /api prefix (matching original: /batches/*, /schedules/*, /progress/*, /admin/batches/*/progress)
-app.include_router(progress.router)
 
 # Dashboard - already has /api/admin/dashboard
 app.include_router(dashboard.router)

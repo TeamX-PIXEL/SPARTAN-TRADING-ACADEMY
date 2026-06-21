@@ -53,7 +53,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchWithAuth } from "@/lib/api-fetch";
+import { fetchWithAuth, API_BASE_URL } from "@/lib/api-fetch";
 
 // --- CONSTANTS ---
 const CURRENCIES = [
@@ -238,7 +238,7 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
 
     async function fetchUserData() {
       try {
-        const response = await fetchWithAuth(`http://127.0.0.1:8000/api/admin/botusers/${userId}`);
+        const response = await fetchWithAuth(`${API_BASE_URL}/api/admin/botusers/${userId}`);
         const result = await response.json();
 
         if (response.ok && result.success) {
@@ -432,7 +432,7 @@ export default function EditUserPage({ params }: { params: Promise<{ id: string 
     };
 
     try {
-      const response = await fetchWithAuth(`http://127.0.0.1:8000/api/admin/botusers/${userId}`, {
+      const response = await fetchWithAuth(`${API_BASE_URL}/api/admin/botusers/${userId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

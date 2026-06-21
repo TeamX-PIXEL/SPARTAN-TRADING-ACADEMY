@@ -9,7 +9,7 @@ import { RazorpayModal } from "./RazorpayModal";
 interface CartLibraryPanelProps {
   isOpen: boolean; // Relevant on Mobile/Tablet drawer mode
   onClose: () => void;
-  onOpenProduct: (uuid: string) => void;
+  onOpenProduct: (id: string) => void;
 }
 
 export const CartLibraryPanel: React.FC<CartLibraryPanelProps> = ({ isOpen, onClose, onOpenProduct }) => {

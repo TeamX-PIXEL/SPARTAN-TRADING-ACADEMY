@@ -45,8 +45,8 @@ export const AlertsPage: React.FC = () => {
       setIsLoadingMore(true);
       const res = await API.getBots(skip, limit);
       setBots(prev => {
-        const existingUuids = new Set(prev.map(b => b.uuid));
-        const newItems = res.items.filter(b => !existingUuids.has(b.uuid));
+        const existingIds = new Set(prev.map(b => b.id));
+        const newItems = res.items.filter(b => !existingIds.has(b.id));
         return [...prev, ...newItems];
       });
       setSkip(prev => prev + limit);
@@ -78,9 +78,9 @@ export const AlertsPage: React.FC = () => {
     };
   }, [skip, hasMore, isLoadingMore]);
 
-  const openProduct = (uuid: string) => {
+  const openProduct = (id: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set('product', uuid);
+    params.set('product', id);
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -127,10 +127,10 @@ export const AlertsPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {bots.map((bot) => (
               <ProductCard
-                key={bot.uuid}
+                key={bot.id}
                 product={bot}
                 type="bot"
-                purchased={purchasedIds.bots.includes(bot.uuid)}
+                purchased={purchasedIds.bots.includes(bot.id)}
                 onOpenDetails={openProduct}
               />
             ))}

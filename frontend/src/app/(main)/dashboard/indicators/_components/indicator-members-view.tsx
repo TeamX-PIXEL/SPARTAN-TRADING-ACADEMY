@@ -11,6 +11,7 @@ import {
   ChevronsRightIcon,
   Edit,
   Gift,
+  IndianRupee,
   Key,
   Loader2,
   Mail,
@@ -74,7 +75,9 @@ interface SearchResult {
 export function IndicatorMembersView({ indicator }: Props) {
   const members = useAcademyStore((s) => s.members);
   const goIndicators = useAcademyStore((s) => s.goIndicators);
+  const fetchIndicatorMembers = useAcademyStore((s) => s.fetchIndicatorMembers);
   const addIndicatorMember = useAcademyStore((s) => s.addIndicatorMember);
+  const updateIndicatorMemberExpiry = useAcademyStore((s) => s.updateIndicatorMemberExpiry);
 
   const [addOpen, setAddOpen] = React.useState(false);
   const [expiryEditOpen, setExpiryEditOpen] = React.useState(false);
@@ -85,10 +88,18 @@ export function IndicatorMembersView({ indicator }: Props) {
   const [searching, setSearching] = React.useState(false);
   const [selectedUser, setSelectedUser] = React.useState<SearchResult | null>(null);
   const [accessType, setAccessType] = React.useState<AccessType>("free");
+  const [amount, setAmount] = React.useState("");
+  const [method, setMethod] = React.useState("Card");
   const [saving, setSaving] = React.useState(false);
 
   const [pageIndex, setPageIndex] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
+
+  React.useEffect(() => {
+    if (indicator) {
+      fetchIndicatorMembers(indicator.indicator_id);
+    }
+  }, [indicator, fetchIndicatorMembers]);
 
   const indicatorMembers = React.useMemo(
     () => (indicator ? members.filter((m) => m.indicatorId === indicator.id) : []),
@@ -112,7 +123,7 @@ export function IndicatorMembersView({ indicator }: Props) {
     if (!q) return;
     setSearching(true);
     try {
-      const res = await fetchWithAuth(`${API_BASE_URL}/users/search?q=${encodeURIComponent(q)}`);
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/users/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data);
@@ -134,26 +145,29 @@ export function IndicatorMembersView({ indicator }: Props) {
     setSearchQuery("");
     setSearchResults([]);
     setAccessType("free");
+    setAmount("");
+    setMethod("Card");
     setAddOpen(true);
   }
 
   async function handleAdd() {
     if (!selectedUser || !indicator) return;
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 350));
-    addIndicatorMember({
-      name: selectedUser.name,
-      email: selectedUser.email,
-      tvid: selectedUser.tvid || "—",
+    const result = await addIndicatorMember(indicator.indicator_id, {
       username: selectedUser.username,
-      accessType,
-      indicatorId: indicator.id,
+      expiry: undefined,
+      amount: accessType === "paid" ? Number(amount) : 0,
+      method: accessType === "paid" ? method : "Free",
     });
     setSaving(false);
-    setAddOpen(false);
-    setSelectedUser(null);
-    setSearchQuery("");
-    toast.success(`${selectedUser.name} was enrolled with ${accessType} access.`);
+    if (result) {
+      setAddOpen(false);
+      setSelectedUser(null);
+      setSearchQuery("");
+      toast.success(`${selectedUser.name} was enrolled with ${accessType} access.`);
+    } else {
+      toast.error("Failed to enrol member.");
+    }
   }
 
   function handleOpenExpiryEdit(member: Member) {
@@ -164,15 +178,13 @@ export function IndicatorMembersView({ indicator }: Props) {
 
   async function handleSaveExpiry() {
     if (!expiryEditMember) return;
-    useAcademyStore.setState((s) => ({
-      members: s.members.map((m) =>
-        m.id === expiryEditMember.id
-          ? { ...m, indicatorExpiry: expiryValue || undefined }
-          : m,
-      ),
-    }));
-    setExpiryEditOpen(false);
-    toast.success(`Expiry updated for ${expiryEditMember.name}.`);
+    const result = await updateIndicatorMemberExpiry(expiryEditMember.id, expiryValue || "");
+    if (result) {
+      setExpiryEditOpen(false);
+      toast.success(`Expiry updated for ${expiryEditMember.name}.`);
+    } else {
+      toast.error("Failed to update expiry.");
+    }
   }
 
   if (!indicator) {
@@ -208,11 +220,10 @@ export function IndicatorMembersView({ indicator }: Props) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Total Members" value={indicatorMembers.length} icon={<Users className="size-4" />} />
         <StatCard label="Paid Access" value={paid} accent="emerald" />
         <StatCard label="Free Access" value={free} accent="amber" icon={<Gift className="size-4" />} />
-        <StatCard label="With TVID" value={indicatorMembers.filter((m) => m.tvid && m.tvid !== "—").length} accent="blue" icon={<Key className="size-4" />} />
       </div>
 
       <Card className="w-full">
@@ -237,7 +248,6 @@ export function IndicatorMembersView({ indicator }: Props) {
                     <TableHead className="w-[60px] text-center">#</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead className="hidden md:table-cell">Email</TableHead>
-                    <TableHead className="hidden lg:table-cell">TVID</TableHead>
                     <TableHead className="text-center">Access</TableHead>
                     <TableHead className="hidden md:table-cell">Joined</TableHead>
                     <TableHead className="hidden md:table-cell">Indicator Expiry</TableHead>
@@ -258,7 +268,7 @@ export function IndicatorMembersView({ indicator }: Props) {
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-medium">{m.name}</p>
-                              <p className="text-[11px] text-muted-foreground">@{m.username || m.tvid}</p>
+                              <p className="text-[11px] text-muted-foreground">@{m.username || "—"}</p>
                             </div>
                           </div>
                         </TableCell>
@@ -268,7 +278,6 @@ export function IndicatorMembersView({ indicator }: Props) {
                             {m.email}
                           </span>
                         </TableCell>
-                        <TableCell className="hidden font-mono text-[12px] lg:table-cell">{m.tvid}</TableCell>
                         <TableCell className="text-center">
                           {m.accessType === "free" ? (
                             <Badge variant="outline" className="gap-1 border-amber-500/30 bg-amber-500/10 font-normal text-amber-700 dark:text-amber-300">
@@ -285,7 +294,7 @@ export function IndicatorMembersView({ indicator }: Props) {
                         <TableCell className="hidden text-sm md:table-cell">
                           <span className="flex items-center gap-1.5">
                             <Calendar className="size-3.5 text-muted-foreground" />
-                            {m.indicatorExpiry || "—"}
+                            {formatDate(m.indicatorExpiry) || "—"}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
@@ -479,6 +488,41 @@ export function IndicatorMembersView({ indicator }: Props) {
                     </SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {selectedUser && accessType === "paid" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="im-amount">Amount (₹)</Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="im-amount"
+                      type="number"
+                      min="0"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="0"
+                      className="pl-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Select value={method} onValueChange={setMethod}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Card">Card</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="Crypto">Crypto</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             )}
           </div>

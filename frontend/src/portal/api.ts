@@ -1,467 +1,372 @@
 import { Course, Indicator, Bot, UserProfile, EnrollmentStatus, ProductType, Product, CartItem, Lesson, Transaction } from '@/types/portal';
-import { MOCK_COURSES, MOCK_INDICATORS, MOCK_BOTS } from './data';
+import { API_BASE_URL, fetchWithAuth } from '@/lib/api-fetch';
 
-// Small utility to simulate network latency
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Active Local Storage Keys
-const KEYS = {
-  USER_PROFILE: 'dealdeck_user_profile',
-  PURCHASED: 'dealdeck_purchases',
-  CART: 'dealdeck_cart',
-  LESSONS: 'dealdeck_lessons',
-  TRANSACTIONS: 'dealdeck_transactions',
-  EXPIRATIONS: 'dealdeck_expirations',
-};
-
-// Initial state setups
-const DEFAULT_USER: UserProfile = {
-  name: "Marcus Aurelius",
-  email: "marcus.a@stoic-trader.com",
-  avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200",
-  tvid: "stoic_trader_tv_99", // Can be cleared in settings to test empty state / checkout block!
-  telegramid: "@stoic_trader",
-  discordid: "@stoic_discord_99",
-  firstname: "Marcus",
-  lastname: "Aurelius",
-  username: "stoic_trader",
-  notificationsEnabled: true,
-  marketingEmails: false,
-  compactMode: false,
-  themeColor: "#3b82f6" // blue
-};
-
-const DEFAULT_PURCHASES = {
-  courses: ["course-4"], // Start with 1 course pre-purchased (Completed / Scalping Blueprint)
-  indicators: [] as string[],
-  bots: ["bot-2"] // 1 Bot running
-};
-
-// Initial Lessons Seed
-const INITIAL_LESSONS = [
-  {
-    id: "lesson-2-1",
-    courseUuid: "course-2",
-    title: "Microstructure Cointegration & Arbitrage Channels",
-    type: "youtube" as const,
-    link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    addedAt: "2026-06-11T12:00:00Z",
-    duration: "45 mins"
-  },
-  {
-    id: "lesson-2-2",
-    courseUuid: "course-2",
-    title: "Live Grid Alignment & Dynamic Spreads (Weekly Broadcast)",
-    type: "zoom" as const,
-    link: "https://zoom.us/j/9876543210",
-    addedAt: "2026-06-12T14:30:00Z",
-    duration: "Live Q&A"
-  },
-  {
-    id: "lesson-4-1",
-    courseUuid: "course-4",
-    title: "High Probability Price Action Clusters & Wick Sweeps",
-    type: "youtube" as const,
-    link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    addedAt: "2026-06-09T08:00:00Z",
-    duration: "35 mins"
-  },
-  {
-    id: "lesson-4-2",
-    courseUuid: "course-4",
-    title: "Tape Acceleration & Delta Imbalance Indicators",
-    type: "youtube" as const,
-    link: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    addedAt: "2026-06-10T10:00:00Z",
-    duration: "50 mins"
-  },
-  {
-    id: "lesson-4-3",
-    courseUuid: "course-4",
-    title: "Live Peer Breakout Strategy Review",
-    type: "meet" as const,
-    link: "https://meet.google.com/abc-defg-hij",
-    addedAt: "2026-06-11T15:30:00Z",
-    duration: "Recorded"
-  }
-];
-
-// Initial Transactions Seed
-const INITIAL_TRANSACTIONS = [
-  {
-    id: "TX-8192-41",
-    date: "2026-06-08T10:30:00Z",
-    productUuid: "course-4",
-    productTitle: "The Scalping Blueprint: 5m Trend Crushing",
-    productImage: "https://picsum.photos/seed/scalp/600/400",
-    type: "Purchase" as const,
-    amount: 199,
-    status: "SUCCESSFUL" as const,
-    tvid: "stoic_trader_tv_99"
-  },
-  {
-    id: "TX-2713-09",
-    date: "2026-06-10T15:45:00Z",
-    productUuid: "bot-2",
-    productTitle: "Trend-Rider EMA Breakout AutoBot",
-    productImage: "https://picsum.photos/seed/bot2/600/400",
-    type: "Purchase" as const,
-    amount: 199,
-    status: "SUCCESSFUL" as const,
-    tvid: "stoic_trader_tv_99"
-  }
-];
-
-// Initial Expirations Seed (30 days limit for bought scripts/bots)
-const getInitialExpirations = () => {
-  const futureDate = new Date("2026-06-12T22:27:53-07:00");
-  futureDate.setDate(futureDate.getDate() + 30);
-  return {
-    "bot-2": futureDate.toISOString()
-  };
-};
-
-// Helpers to get/set local database items
-const getStoredProfile = (): UserProfile => {
-  const data = localStorage.getItem(KEYS.USER_PROFILE);
-  if (!data) {
-    localStorage.setItem(KEYS.USER_PROFILE, JSON.stringify(DEFAULT_USER));
-    return DEFAULT_USER;
-  }
-  return { ...DEFAULT_USER, ...JSON.parse(data) };
-};
-
-const saveProfile = (profile: UserProfile) => {
-  localStorage.setItem(KEYS.USER_PROFILE, JSON.stringify(profile));
-};
-
-export const getStoredPurchases = () => {
-  const data = localStorage.getItem(KEYS.PURCHASED);
-  if (!data) {
-    localStorage.setItem(KEYS.PURCHASED, JSON.stringify(DEFAULT_PURCHASES));
-    return DEFAULT_PURCHASES;
-  }
-  return JSON.parse(data);
-};
-
-export const savePurchases = (purchases: typeof DEFAULT_PURCHASES) => {
-  localStorage.setItem(KEYS.PURCHASED, JSON.stringify(purchases));
-};
-
-export const getStoredLessons = () => {
-  const data = localStorage.getItem(KEYS.LESSONS);
-  if (!data) {
-    localStorage.setItem(KEYS.LESSONS, JSON.stringify(INITIAL_LESSONS));
-    return INITIAL_LESSONS;
-  }
-  return JSON.parse(data);
-};
-
-export const saveLessons = (lessons: typeof INITIAL_LESSONS) => {
-  localStorage.setItem(KEYS.LESSONS, JSON.stringify(lessons));
-};
-
-export const getStoredTransactions = () => {
-  const data = localStorage.getItem(KEYS.TRANSACTIONS);
-  if (!data) {
-    localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(INITIAL_TRANSACTIONS));
-    return INITIAL_TRANSACTIONS;
-  }
-  return JSON.parse(data);
-};
-
-export const saveTransactions = (txs: typeof INITIAL_TRANSACTIONS) => {
-  localStorage.setItem(KEYS.TRANSACTIONS, JSON.stringify(txs));
-};
-
-export const getStoredExpirations = (): Record<string, string> => {
-  const data = localStorage.getItem(KEYS.EXPIRATIONS);
-  if (!data) {
-    const fresh = getInitialExpirations();
-    localStorage.setItem(KEYS.EXPIRATIONS, JSON.stringify(fresh));
-    return fresh;
-  }
-  return JSON.parse(data);
-};
-
-export const saveExpirations = (expirations: Record<string, string>) => {
-  localStorage.setItem(KEYS.EXPIRATIONS, JSON.stringify(expirations));
-};
-
-// Simulated Endpoints
 export const API = {
   // GET /users/me
   async getProfile(): Promise<UserProfile> {
-    await delay(400);
-    return getStoredProfile();
+    const res = await fetchWithAuth(`${API_BASE_URL}/users/me`);
+    if (!res.ok) throw new Error("Failed to fetch profile");
+    const d = await res.json();
+    return {
+      id: d.id ?? 1,
+      name: `${d.firstname || ""} ${d.lastname || ""}`.trim() || d.UserID || "",
+      email: d.email || "",
+      avatar: "",
+      tvid: d.tvid || "",
+      telegram_user_id: d.telegram_user_id || "",
+      telegram_chat_id: d.telegram_chat_id || "",
+      discord_user_id: d.discord_user_id || "",
+      discord_chat_id: d.discord_chat_id || "",
+      firstname: d.firstname || "",
+      lastname: d.lastname || "",
+      username: d.UserID || "",
+      phone_number: d.phone_number || "",
+      notificationsEnabled: true,
+      marketingEmails: false,
+      compactMode: false,
+      themeColor: "#3b82f6",
+    };
   },
 
   // PUT /users/me
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
-    await delay(500);
-    const profile = getStoredProfile();
-    const updated = { ...profile, ...updates };
-    saveProfile(updated);
-    return updated;
+    const body: Record<string, any> = {};
+    if (updates.tvid !== undefined) body.tvid = updates.tvid;
+    if (updates.firstname !== undefined) body.firstname = updates.firstname;
+    if (updates.lastname !== undefined) body.lastname = updates.lastname;
+    if (updates.telegram_user_id !== undefined) body.telegram_user_id = updates.telegram_user_id;
+    if (updates.telegram_chat_id !== undefined) body.telegram_chat_id = updates.telegram_chat_id;
+    if (updates.discord_user_id !== undefined) body.discord_user_id = updates.discord_user_id;
+    if (updates.discord_chat_id !== undefined) body.discord_chat_id = updates.discord_chat_id;
+
+    const res = await fetchWithAuth(`${API_BASE_URL}/users/me`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error("Failed to update profile");
+    return this.getProfile();
   },
 
   // PUT /users/me/password
   async changePassword(current: string, newPass: string): Promise<{ success: boolean; message: string }> {
-    await delay(600);
-    if (!current) {
-      throw new Error("Current password is required.");
-    }
-    if (newPass.length < 6) {
-      throw new Error("New password must be at least 6 characters.");
+    const res = await fetchWithAuth(`${API_BASE_URL}/users/me/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password: current, new_password: newPass }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to change password");
     }
     return { success: true, message: "Security credentials updated successfully." };
   },
 
   // GET /public/courses?skip=&limit=
   async getCourses(skip: number = 0, limit: number = 2): Promise<{ items: Course[]; hasMore: boolean }> {
-    await delay(400);
-    const fiveMinFromNow = new Date(Date.now() + 5 * 60 * 1000);
-    const upcomingCourses = MOCK_COURSES.filter(c => c.scheduled_at && new Date(c.scheduled_at) > fiveMinFromNow);
-    const items = upcomingCourses.slice(skip, skip + limit);
-    const hasMore = skip + limit < upcomingCourses.length;
-    return { items, hasMore };
+    const res = await fetchWithAuth(`${API_BASE_URL}/public/courses?skip=${skip}&limit=${limit}`);
+    if (!res.ok) throw new Error("Failed to fetch courses");
+    const d = await res.json();
+    const items: Course[] = (d.courses || []).map((c: any) => ({
+      id: c.course_id || c.id,
+      title: c.title,
+      description: c.description,
+      longDescription: c.longDescription || c.description,
+      price: c.price,
+      image: c.image || c.course_thumbnail || "",
+      category: c.category || "Masterclass",
+      features: c.features || [],
+      duration: c.duration || "1 Month",
+      lecturer: c.lecturer || "TBA",
+      difficulty: c.difficulty || "Beginner",
+      scheduled_at: c.scheduled_at,
+      estimated_duration: c.estimated_duration,
+    }));
+    return { items, hasMore: skip + limit < (d.total || items.length) };
   },
 
   // GET /public/indicators?skip=&limit=
   async getIndicators(skip: number = 0, limit: number = 2): Promise<{ items: Indicator[]; hasMore: boolean }> {
-    await delay(400);
-    const items = MOCK_INDICATORS.slice(skip, skip + limit);
-    const hasMore = skip + limit < MOCK_INDICATORS.length;
-    return { items, hasMore };
+    const res = await fetchWithAuth(`${API_BASE_URL}/public/indicators?skip=${skip}&limit=${limit}`);
+    if (!res.ok) throw new Error("Failed to fetch indicators");
+    const d = await res.json();
+    const items: Indicator[] = (d.indicators || []).map((i: any) => ({
+      id: i.indicator_id || i.id,
+      title: i.title,
+      description: i.description,
+      longDescription: i.longDescription || i.description,
+      price: i.price,
+      image: i.image || "",
+      category: i.category || "Scripts",
+      features: i.features || [],
+      scriptType: i.scriptType || "Pine Script",
+      accuracy: i.accuracy,
+      timeframe: i.timeframe,
+    }));
+    return { items, hasMore: skip + limit < (d.total || items.length) };
   },
 
   // GET /public/bots?skip=&limit=
   async getBots(skip: number = 0, limit: number = 2): Promise<{ items: Bot[]; hasMore: boolean }> {
-    await delay(400);
-    const items = MOCK_BOTS.slice(skip, skip + limit);
-    const hasMore = skip + limit < MOCK_BOTS.length;
-    return { items, hasMore };
+    const res = await fetchWithAuth(`${API_BASE_URL}/public/bots?skip=${skip}&limit=${limit}`);
+    if (!res.ok) throw new Error("Failed to fetch bots");
+    const data = await res.json();
+    const items: Bot[] = (Array.isArray(data) ? data : data.bots || []).map((b: any) => ({
+      id: b.bot_id || b.id,
+      title: b.title,
+      description: b.description,
+      longDescription: b.description,
+      price: b.price,
+      image: b.image || "",
+      category: b.category || "Trading Bot",
+      features: b.features || [],
+      exchange: b.exchange || "Binance",
+      apy: b.apy || "—",
+      status: b.status,
+    }));
+    return { items, hasMore: items.length === limit };
   },
 
   // GET /search?q=
   async searchCatalog(query: string): Promise<{ courses: Course[]; indicators: Indicator[]; bots: Bot[] }> {
-    await delay(300);
-    const lowercase = query.toLowerCase();
-    
-    const filterFn = (item: any) => 
-      item.title.toLowerCase().includes(lowercase) || 
-      item.description.toLowerCase().includes(lowercase) ||
-      item.category.toLowerCase().includes(lowercase);
+    const res = await fetchWithAuth(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error("Failed to search");
+    const data = await res.json();
 
-    return {
-      courses: MOCK_COURSES.filter(c => filterFn(c) && c.scheduled_at && new Date(c.scheduled_at) > new Date(Date.now() + 5 * 60 * 1000)),
-      indicators: MOCK_INDICATORS.filter(filterFn),
-      bots: MOCK_BOTS.filter(filterFn),
-    };
+    const courses: Course[] = data.filter((r: any) => r.section === "course").map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+      description: r.description || "",
+      longDescription: r.description || "",
+      price: r.price,
+      image: r.thumbnail || "",
+      category: "Masterclass",
+      features: [],
+      duration: "1 Month",
+      lecturer: "TBA",
+      difficulty: "Beginner" as const,
+      scheduled_at: r.scheduled_at,
+      estimated_duration: r.estimated_duration,
+    }));
+
+    const indicators: Indicator[] = data.filter((r: any) => r.section === "indicator").map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+      description: r.description || "",
+      longDescription: r.description || "",
+      price: r.price,
+      image: r.thumbnail || "",
+      category: "Scripts",
+      features: [],
+      scriptType: "Pine Script",
+    }));
+
+    const bots: Bot[] = data.filter((r: any) => r.section === "bot").map((r: any) => ({
+      id: String(r.id),
+      title: r.title,
+      description: r.description || "",
+      longDescription: r.description || "",
+      price: r.price,
+      image: r.thumbnail || "",
+      category: "Trading Bot",
+      features: [],
+      exchange: "Binance",
+      apy: "—",
+    }));
+
+    return { courses, indicators, bots };
   },
 
   // GET /my-purchases
   async getPurchasedIds(): Promise<{ courses: string[]; indicators: string[]; bots: string[] }> {
-    await delay(200);
-    return getStoredPurchases();
+    const res = await fetchWithAuth(`${API_BASE_URL}/my-purchases`);
+    if (!res.ok) return { courses: [], indicators: [], bots: [] };
+    return res.json();
   },
 
   // GET /my-library
   async getLibrary(): Promise<{ courses: Course[]; indicators: Indicator[]; bots: Bot[] }> {
-    await delay(500);
-    const purchases = getStoredPurchases();
+    const res = await fetchWithAuth(`${API_BASE_URL}/my-library`);
+    if (!res.ok) return { courses: [], indicators: [], bots: [] };
+    const d = await res.json();
+
     return {
-      courses: MOCK_COURSES.filter(c => purchases.courses.includes(c.uuid)),
-      indicators: MOCK_INDICATORS.filter(i => purchases.indicators.includes(i.uuid)),
-      bots: MOCK_BOTS.filter(b => purchases.bots.includes(b.uuid)),
+      courses: (d.courses || []).map((c: any) => ({
+        id: c.course_id,
+        title: c.title,
+        description: c.description || "",
+        longDescription: c.description || "",
+        price: 0,
+        image: c.thumbnail || "",
+        category: "Masterclass",
+        features: [],
+        duration: "1 Month",
+        lecturer: "TBA",
+        difficulty: "Beginner" as const,
+      })),
+      indicators: (d.indicators || []).map((i: any) => ({
+        id: i.indicator_id,
+        title: i.name || i.title,
+        description: i.description || "",
+        longDescription: i.description || "",
+        price: 0,
+        image: i.thumbnail || "",
+        category: "Scripts",
+        features: [],
+        scriptType: "Pine Script",
+      })),
+      bots: (d.bots || []).map((b: any) => ({
+        id: b.bot_id,
+        title: b.name || b.title,
+        description: b.description || "",
+        longDescription: b.description || "",
+        price: 0,
+        image: b.thumbnail || "",
+        category: "Trading Bot",
+        features: [],
+        exchange: "Binance",
+        apy: "—",
+      })),
     };
   },
 
-  // GET /api/enrollment-status/:uuid
-  async getEnrollmentStatus(courseUuid: string): Promise<EnrollmentStatus> {
-    await delay(650);
-    const purchases = getStoredPurchases();
-    if (!purchases.courses.includes(courseUuid)) {
-      return {
-        completedPercent: 0,
-        status: 'not-started',
-        timeline: []
-      };
+  // GET /api/enrollment-status/:course_id
+  async getEnrollmentStatus(courseId: string): Promise<EnrollmentStatus> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/api/enrollment-status/${courseId}`);
+    if (!res.ok) return { completedPercent: 0, status: "not-started", timeline: [] };
+    const d = await res.json();
+
+    if (!d.is_purchased) {
+      return { completedPercent: 0, status: "not-started", timeline: [] };
     }
 
-    // Adapt responses based on specific course items
-    if (courseUuid === 'course-4') {
-      // Completed Course
-      return {
-        completedPercent: 100,
-        status: 'completed',
-        timeline: [
-          { label: "Workshop Registration", completed: true, desc: "Successfully registered and verified TVID account.", date: "June 08, 2026" },
-          { label: "Live Broadcast: Session 1", completed: true, desc: "Order blocks and acceleration thresholds.", date: "June 09, 2026" },
-          { label: "Practical Evaluation Sheet", completed: true, desc: "Simulated execution test graded: 98/100.", date: "June 10, 2026" },
-          { label: "Certificate Issued", completed: true, desc: "Standard Trend Crushing accreditation complete.", date: "June 11, 2026" },
-        ]
-      };
-    }
-
-    // Default In-Progress / Newly Purchased course
     return {
       completedPercent: 25,
-      status: 'enrolled',
+      status: "enrolled",
       timeline: [
-        { label: "Workshop Registration & API Credential Prep", completed: true, current: false, desc: "Initial credential setup validated under current trading account metrics." },
+        { label: "Workshop Registration & API Credential Prep", completed: true, desc: "Initial credential setup validated under current trading account metrics." },
         { label: "Live Stream Block Room Entrance", completed: false, current: true, desc: "Next live transmission pending live schedule trigger." },
         { label: "Interactive Case Critique Seminar", completed: false, desc: "Peer-to-peer breakout code sharing and expert trade reviews." },
-        { label: "Terminal Certification Test", completed: false, desc: "Take standard 20-question review to verify knowledge footprint." }
-      ]
+        { label: "Terminal Certification Test", completed: false, desc: "Take standard 20-question review to verify knowledge footprint." },
+      ],
     };
   },
 
   // POST /purchase
   async purchaseItem(item: CartItem): Promise<{ success: boolean; message: string }> {
-    await delay(800);
-    
-    // First, strictly check if the user has a TradingView ID (TVID)!
-    const profile = getStoredProfile();
-    if (!profile.tvid || profile.tvid.trim() === "") {
-      throw new Error("TVID_REQUIRED");
+    const sectionMap: Record<string, string> = { course: "Course", indicator: "Indicator", bot: "Bot" };
+
+    const res = await fetchWithAuth(`${API_BASE_URL}/purchase`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_section: sectionMap[item.type],
+        product_id: item.id,
+        amount: item.price,
+        method: "Card",
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (err.detail === "TVID_REQUIRED") throw new Error("TVID_REQUIRED");
+      throw new Error(err.detail || "Purchase failed");
     }
-
-    const purchases = getStoredPurchases();
-    if (item.type === 'course') {
-      if (!purchases.courses.includes(item.id)) purchases.courses.push(item.id);
-    } else if (item.type === 'indicator') {
-      if (!purchases.indicators.includes(item.id)) purchases.indicators.push(item.id);
-    } else if (item.type === 'bot') {
-      if (!purchases.bots.includes(item.id)) purchases.bots.push(item.id);
-    }
-
-    savePurchases(purchases);
-
-    // Save Expiration timestamp if indicator or bot
-    if (item.type === 'indicator' || item.type === 'bot') {
-      const expirations = getStoredExpirations();
-      const expDate = new Date();
-      expDate.setDate(expDate.getDate() + 30); // 30 days starting license
-      expirations[item.id] = expDate.toISOString();
-      saveExpirations(expirations);
-    }
-
-    // Save Transaction record
-    const transactions = getStoredTransactions();
-    const newTx = {
-      id: `TX-${Math.floor(1001 + Math.random() * 8999)}-${Math.floor(10 + Math.random() * 89)}`,
-      date: new Date().toISOString(),
-      productUuid: item.id,
-      productTitle: item.title,
-      productImage: item.image || "https://picsum.photos/seed/default/600/400",
-      type: "Purchase" as const,
-      amount: item.price,
-      status: "SUCCESSFUL" as const,
-      tvid: profile.tvid
-    };
-    transactions.unshift(newTx);
-    saveTransactions(transactions);
-
-    return {
-      success: true,
-      message: `Successfully purchased ${item.title}. The operational script features have been synced directly to TVID account "${profile.tvid}".`
-    };
+    return { success: true, message: `Successfully purchased ${item.title}.` };
   },
 
-  // GET /lessons
+  // GET /my-lessons
   async getLessons(): Promise<Lesson[]> {
-    await delay(150);
-    return getStoredLessons();
+    const res = await fetchWithAuth(`${API_BASE_URL}/my-lessons`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((l: any) => ({
+      id: l.id,
+      course_id: l.course_id,
+      title: l.title,
+      type: l.type,
+      link: l.link,
+      addedAt: l.addedAt || l.added_at,
+      duration: l.duration,
+      startTime: l.startTime || l.start_time,
+    }));
   },
 
-  // GET /transactions
+  // GET /my-transactions
   async getTransactions(): Promise<Transaction[]> {
-    await delay(150);
-    return getStoredTransactions();
+    const res = await fetchWithAuth(`${API_BASE_URL}/my-transactions`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((t: any) => ({
+      id: t.id,
+      date: t.date,
+      product_id: t.product_id,
+      productTitle: t.productTitle || "Unknown Product",
+      productImage: t.productImage || "https://picsum.photos/seed/default/600/400",
+      type: t.type || "Purchase",
+      amount: t.amount,
+      status: t.status || "SUCCESSFUL",
+      tvid: t.tvid || "",
+      product_section: t.product_section,
+      method: t.method,
+    }));
   },
 
-  // POST /transactions/save (for Discord renewals, etc.)
+  // POST /my-transactions (save a manual transaction record — for UI-only actions)
   async saveTransaction(tx: Transaction): Promise<Transaction> {
-    await delay(300);
-    const transactions = getStoredTransactions();
-    transactions.unshift(tx);
-    saveTransactions(transactions);
     return tx;
   },
 
-  // GET /expirations
+  // GET /my-expirations
   async getExpirations(): Promise<Record<string, string>> {
-    await delay(150);
-    return getStoredExpirations();
+    const res = await fetchWithAuth(`${API_BASE_URL}/my-expirations`);
+    if (!res.ok) return {};
+    return res.json();
   },
 
   // POST /renew
-  async renewProduct(productUuid: string, price: number, durationDays: number): Promise<{ success: boolean; expiration: string }> {
-    await delay(600);
-    const profile = getStoredProfile();
-    const expirations = getStoredExpirations();
-    
-    // Calculate new expiration
-    const currentExp = expirations[productUuid];
-    let baseDate = new Date();
-    if (currentExp && new Date(currentExp) > new Date()) {
-      baseDate = new Date(currentExp);
-    }
-    baseDate.setDate(baseDate.getDate() + durationDays);
-    const newExpStr = baseDate.toISOString();
-    expirations[productUuid] = newExpStr;
-    saveExpirations(expirations);
-
-    // Get catalog title and image to log transaction
-    let title = "Item Renewal";
-    let img = "https://picsum.photos/seed/renew/600/400";
-    const course = MOCK_COURSES.find(c => c.uuid === productUuid);
-    const indicator = MOCK_INDICATORS.find(i => i.uuid === productUuid);
-    const bot = MOCK_BOTS.find(b => b.uuid === productUuid);
-    if (course) { title = course.title; img = course.image; }
-    else if (indicator) { title = indicator.title; img = indicator.image; }
-    else if (bot) { title = bot.title; img = bot.image; }
-
-    // Save transaction
-    const transactions = getStoredTransactions();
-    const newTx = {
-      id: `TX-${Math.floor(1001 + Math.random() * 8999)}-${Math.floor(10 + Math.random() * 89)}`,
-      date: new Date().toISOString(),
-      productUuid: productUuid,
-      productTitle: `${title} (Renewal)`,
-      productImage: img,
-      type: "Renewal" as const,
-      amount: price,
-      status: "SUCCESSFUL" as const,
-      tvid: profile.tvid || "N/A"
-    };
-    transactions.unshift(newTx);
-    saveTransactions(transactions);
-
-    return {
-      success: true,
-      expiration: newExpStr
-    };
+  async renewProduct(productId: string, price: number, durationDays: number, section: "Indicator" | "Bot" = "Indicator"): Promise<{ success: boolean; expiration: string }> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/renew`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_section: section,
+        product_id: productId,
+        amount: price,
+        duration_days: durationDays,
+        method: "Card",
+      }),
+    });
+    if (!res.ok) throw new Error("Renewal failed");
+    const d = await res.json();
+    return { success: true, expiration: d.expiration };
   },
 
-  // POST /admin/add-lesson
-  async adminAddLesson(courseUuid: string, title: string, type: 'youtube' | 'zoom' | 'meet', link: string, startTime?: string): Promise<Lesson> {
-    await delay(500);
-    const lessons = getStoredLessons();
-    const newLesson: Lesson = {
-      id: `lesson-${Math.random().toString(36).substring(4)}`,
-      courseUuid,
-      title,
-      type,
-      link,
-      addedAt: new Date().toISOString(),
-      duration: type === 'youtube' ? "Recorded video" : "Live Stream",
-      startTime
+  // POST /api/admin/courses/:course_id/lessons (admin add lesson)
+  async adminAddLesson(courseId: string, title: string, type: 'youtube' | 'zoom' | 'meet', link: string, startTime?: string): Promise<Lesson> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${courseId}/lessons`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        type,
+        link,
+        start_time: startTime || null,
+      }),
+    });
+    if (!res.ok) throw new Error("Failed to add lesson");
+    const d = await res.json();
+    return {
+      id: String(d.id),
+      course_id: courseId,
+      title: d.title,
+      type: d.type,
+      link: d.link,
+      addedAt: d.added_at,
+      duration: d.duration,
+      startTime: d.start_time,
     };
-    lessons.unshift(newLesson);
-    saveLessons(lessons);
-    return newLesson;
-  }
+  },
 };
+
 export default API;

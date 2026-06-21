@@ -7,19 +7,21 @@ from urllib.parse import unquote
 from datetime import date
 import mysql.connector
 from app.database import get_db_connection
-from app.services.telegram import DB_TABLE_USERS
+from app.services.telegram import DB_TABLE_EVERGREEN, DB_TABLE_LEGACY
 from app.config import get_settings
 
 settings = get_settings()
 
 router = APIRouter(prefix="/api/miniapp", tags=["MiniApp"])
 
+MODEL_TO_TABLE = {
+    "Evergreen": DB_TABLE_EVERGREEN,
+    "Legacy": DB_TABLE_LEGACY,
+}
+
 
 def validate_init_data(init_data: str):
-    """
-    Validates Telegram WebApp initData using HMAC against all three bot tokens.
-    Returns {'user': user_data, 'model': model} or None.
-    """
+    """Validates Telegram WebApp initData using HMAC against bot tokens."""
     try:
         init_data = unquote(init_data)
         pairs = init_data.split('&')
@@ -38,7 +40,6 @@ def validate_init_data(init_data: str):
         tokens = {
             'Evergreen': settings.EVERGREEN_BOT_TOKEN,
             'Legacy': settings.LEGACY_BOT_TOKEN,
-            'Alpha': settings.ALPHA_BOT_TOKEN
         }
 
         for model, token in tokens.items():
@@ -61,6 +62,21 @@ def validate_init_data(init_data: str):
         return None
 
 
+def _resolve_username_by_telegram(telegram_id: str) -> str | None:
+    """Look up a username by telegram_user_id from the users table."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT username FROM users WHERE telegram_user_id = %s", (telegram_id,))
+        row = cursor.fetchone()
+        return row.get("username") if row else None
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.post("/auth")
 async def miniapp_auth(request: Request):
     data = await request.json()
@@ -79,13 +95,22 @@ async def miniapp_auth(request: Request):
     if not telegram_id:
         return JSONResponse({'success': False, 'status': 'invalid'})
 
+    # Resolve username from users table
+    username = _resolve_username_by_telegram(telegram_id)
+    if not username:
+        return JSONResponse({'success': False, 'status': 'not_found', 'model': model})
+
+    # Query the correct filter table
+    table = MODEL_TO_TABLE.get(model, DB_TABLE_EVERGREEN)
+    prefix = "Evergreen" if model == "Evergreen" else "Legacy"
+
     connection = get_db_connection()
     if connection is None:
         return JSONResponse({'success': False, 'status': 'error'})
 
     cursor = connection.cursor(dictionary=True)
     try:
-        cursor.execute(f"SELECT * FROM {DB_TABLE_USERS} WHERE telegram_id = %s", (telegram_id,))
+        cursor.execute(f"SELECT * FROM {table} WHERE user = %s", (username,))
         user = cursor.fetchone()
     finally:
         cursor.close()
@@ -94,20 +119,21 @@ async def miniapp_auth(request: Request):
     if not user:
         return JSONResponse({'success': False, 'status': 'not_found', 'model': model})
 
-    prefix = "Evergreen"
-    if model == "Legacy":
-        prefix = "Legacy"
-    elif model == "Alpha":
-        prefix = "Alpha"
-
-    expiry_col = f"{prefix}_Expiry"
-    access_col = f"{prefix}_Access"
-
-    if user.get(expiry_col) and user[expiry_col] < date.today():
-        return JSONResponse({'success': False, 'status': 'expired', 'model': model})
-
-    if not user.get(access_col):
-        return JSONResponse({'success': False, 'status': 'no_access', 'model': model})
+    # Check access via bot_members expiry
+    bot_id = "evergreen" if model == "Evergreen" else "legacy"
+    conn = get_db_connection()
+    if conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute("SELECT expiry FROM bot_members WHERE username = %s AND bot_id = %s", (username, bot_id))
+            member = cur.fetchone()
+            if not member or not member.get('expiry') or member['expiry'].date() < date.today():
+                return JSONResponse({'success': False, 'status': 'expired', 'model': model})
+        finally:
+            cur.close()
+            conn.close()
+    else:
+        return JSONResponse({'success': False, 'status': 'error'})
 
     def get_val(simple_col):
         if simple_col == 'CR':
@@ -186,11 +212,6 @@ async def miniapp_auth(request: Request):
         events_data['CR'] = active_cr
         events_data['LCY'] = [col for col in lcy_cols if get_val(col)]
         events_data['LCY_Sweep'] = [col for col in lcy_sweep_cols if get_val(col)]
-    elif model == "Alpha":
-        events_data['CR'] = [col for col in cr_cols if get_val(col)]
-        events_data['BRK'] = [col for col in brk_cols if get_val(col)]
-        events_data['CISD'] = [col for col in cisd_cols if get_val(col)]
-        events_data['CISD_PCL'] = [col for col in cisd_pcl_cols if get_val(col)]
 
     filters = {
         'currency_pairs': [col for col in currency_pairs_cols if get_val(col)],
@@ -204,7 +225,7 @@ async def miniapp_auth(request: Request):
         'zone': [col for col in ['Zone'] if get_val(col)]
     }
 
-    return JSONResponse({'success': True, 'user': {'id': user['id']}, 'filters': filters, 'model': model})
+    return JSONResponse({'success': True, 'user': {'id': user['id'], 'username': username}, 'filters': filters, 'model': model})
 
 
 @router.get("/filters")
@@ -287,45 +308,6 @@ def miniapp_filter_lists(model: str = "Evergreen"):
                 ]
             }
         })
-    elif model == "Alpha":
-        events_filters.update({
-            'BRK': {
-                'Entry': [obj('BRK', 'BRK')],
-                'Filters': [obj('OP', 'BRK_OP')],
-                'SMT': [
-                    obj('Swing', 'BRK_Swing_SMT'),
-                    obj('Strong SMT', 'BRK_Swing_Strong_SMT_BUY'),
-                    obj('Weak SMT', 'BRK_Swing_Weak_SMT_SELL'),
-                    obj('Mitigation', 'BRK_Mitigation_SMT'),
-                    obj('Strong SMT', 'BRK_Mitigation_Strong_SMT_BUY'),
-                    obj('Weak SMT', 'BRK_Mitigation_Weak_SMT_SELL')
-                ]
-            },
-            'CISD': {
-                'Entry': [obj('CISD', 'CISD')],
-                'Filters': [obj('OP', 'CISD_OP')],
-                'SMT': [
-                    obj('Swing', 'CISD_Swing_SMT'),
-                    obj('Strong SMT', 'CISD_Swing_Strong_SMT_BUY'),
-                    obj('Weak SMT', 'CISD_Swing_Weak_SMT_SELL'),
-                    obj('Mitigation', 'CISD_Mitigation_SMT'),
-                    obj('Strong SMT', 'CISD_Mitigation_Strong_SMT_BUY'),
-                    obj('Weak SMT', 'CISD_Mitigation_Weak_SMT_SELL')
-                ]
-            },
-            'CISD_PCL': {
-                'Entry': [obj('CISD PCL', 'CISD_PCL')],
-                'Filters': [obj('OP', 'CISD_PCL_OP')],
-                'SMT': [
-                    obj('Swing', 'CISD_PCL_Swing_SMT'),
-                    obj('Strong SMT', 'CISD_PCL_Swing_Strong_SMT_BUY'),
-                    obj('Weak SMT', 'CISD_PCL_Swing_Weak_SMT_SELL'),
-                    obj('Mitigation', 'CISD_PCL_Mitigation_SMT'),
-                    obj('Strong SMT', 'CISD_PCL_Mitigation_Strong_SMT_BUY'),
-                    obj('Weak SMT', 'CISD_PCL_Mitigation_Weak_SMT_SELL')
-                ]
-            }
-        })
 
     return JSONResponse({
         'currency_pairs': [
@@ -353,9 +335,13 @@ async def miniapp_update_filter(user_id: int, filter_type: str, request: Request
     filter_name = data.get('filter')
     enabled = data.get('enabled')
     model = data.get('model', 'Evergreen')
+    username = data.get('username', '')
 
     if filter_name is None or enabled is None:
         return JSONResponse({'success': False})
+
+    table = MODEL_TO_TABLE.get(model, DB_TABLE_EVERGREEN)
+    prefix = "Evergreen" if model == "Evergreen" else "Legacy"
 
     connection = get_db_connection()
     if connection is None:
@@ -363,21 +349,16 @@ async def miniapp_update_filter(user_id: int, filter_type: str, request: Request
 
     cursor = connection.cursor()
     try:
-        prefix = "Evergreen"
-        if model == "Legacy":
-            prefix = "Legacy"
-        elif model == "Alpha":
-            prefix = "Alpha"
-
-        expiry_col = f"{prefix}_Expiry"
-        access_col = f"{prefix}_Access"
-
+        # Check access via bot_members expiry
+        bot_id = "evergreen" if model == "Evergreen" else "legacy"
         cursor.execute(
-            f"SELECT id FROM {DB_TABLE_USERS} WHERE id = %s AND {expiry_col} >= CURDATE() AND {access_col} = TRUE",
-            (user_id,)
+            "SELECT expiry FROM bot_members WHERE username = (SELECT user FROM " + table + " WHERE id = %s) AND bot_id = %s",
+            (user_id, bot_id)
         )
-        if not cursor.fetchone():
-            return JSONResponse({'success': False, 'message': 'Invalid user, expired, or no access'})
+        member = cursor.fetchone()
+        from datetime import date as _date
+        if not member or not member[0] or member[0].date() < _date.today():
+            return JSONResponse({'success': False, 'message': 'Invalid user or no access'})
 
         db_col = filter_name
         needs_prefix = True
@@ -400,7 +381,7 @@ async def miniapp_update_filter(user_id: int, filter_type: str, request: Request
         if needs_prefix:
             db_col = f"{prefix}_{filter_name}"
 
-        cursor.execute(f"UPDATE {DB_TABLE_USERS} SET `{db_col}` = %s WHERE id = %s", (enabled, user_id))
+        cursor.execute(f"UPDATE {table} SET `{db_col}` = %s WHERE id = %s", (enabled, user_id))
         connection.commit()
         return JSONResponse({'success': True})
     except mysql.connector.Error as err:
@@ -420,27 +401,25 @@ async def miniapp_batch_update(user_id: int, request: Request):
     if not isinstance(changes, list):
         return JSONResponse({'success': False, 'message': 'Invalid data format.'})
 
+    table = MODEL_TO_TABLE.get(model, DB_TABLE_EVERGREEN)
+    prefix = "Evergreen" if model == "Evergreen" else "Legacy"
+
     connection = get_db_connection()
     if connection is None:
         return JSONResponse({'success': False, 'message': 'Database connection error.'})
 
     cursor = connection.cursor()
     try:
-        prefix = "Evergreen"
-        if model == "Legacy":
-            prefix = "Legacy"
-        elif model == "Alpha":
-            prefix = "Alpha"
-
-        expiry_col = f"{prefix}_Expiry"
-        access_col = f"{prefix}_Access"
-
+        # Check access via bot_members expiry
+        bot_id = "evergreen" if model == "Evergreen" else "legacy"
         cursor.execute(
-            f"SELECT id FROM {DB_TABLE_USERS} WHERE id = %s AND {expiry_col} >= CURDATE() AND {access_col} = TRUE",
-            (user_id,)
+            "SELECT expiry FROM bot_members WHERE username = (SELECT user FROM " + table + " WHERE id = %s) AND bot_id = %s",
+            (user_id, bot_id)
         )
-        if not cursor.fetchone():
-            return JSONResponse({'success': False, 'message': 'User not found, expired, or no access.'})
+        member = cursor.fetchone()
+        from datetime import date as _date
+        if not member or not member[0] or member[0].date() < _date.today():
+            return JSONResponse({'success': False, 'message': 'User not found or no access.'})
 
         for change in changes:
             filter_name = change.get('filterName')
@@ -471,7 +450,7 @@ async def miniapp_batch_update(user_id: int, request: Request):
                 db_col = f"{prefix}_{filter_name}"
 
             try:
-                cursor.execute(f"UPDATE {DB_TABLE_USERS} SET `{db_col}` = %s WHERE id = %s", (enabled, user_id))
+                cursor.execute(f"UPDATE {table} SET `{db_col}` = %s WHERE id = %s", (enabled, user_id))
             except mysql.connector.Error as err:
                 connection.rollback()
                 print(f"Batch DB Error on column {db_col}: {err}")

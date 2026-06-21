@@ -11,11 +11,11 @@ class Settings:
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
-    DB_TABLE_USERS: str = os.getenv("DB_TABLE_USERS", "signal_users")
+    DB_TABLE_EVERGREEN: str = os.getenv("DB_TABLE_EVERGREEN", "evergreen_bot_alert_filter")
+    DB_TABLE_LEGACY: str = os.getenv("DB_TABLE_LEGACY", "legacy_bot_alert_filter")
 
     EVERGREEN_BOT_TOKEN: str = os.getenv("EVERGREEN_BOT_TOKEN", "")
     LEGACY_BOT_TOKEN: str = os.getenv("LEGACY_BOT_TOKEN", "")
-    ALPHA_BOT_TOKEN: str = os.getenv("ALPHA_BOT_TOKEN", "")
 
     SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
