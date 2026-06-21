@@ -285,9 +285,13 @@ def get_public_indicators(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(_get_optional_user),
 ):
-    """Returns indicators visible to public."""
-    total = db.query(Indicator).count()
-    indicators = db.query(Indicator).offset(skip).limit(limit).all()
+    """Returns indicators visible to public, excluding draft/unavailable."""
+    query = db.query(Indicator).filter(
+        Indicator.status.notin_(["draft", "unavailable"])
+    )
+
+    total = query.count()
+    indicators = query.offset(skip).limit(limit).all()
 
     items = []
     for ind in indicators:
