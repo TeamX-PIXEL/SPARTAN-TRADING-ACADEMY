@@ -17,6 +17,7 @@ export interface Course extends BaseProduct {
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   scheduled_at?: string;
   estimated_duration?: number;
+  discord_renewal_price?: number;
 }
 
 export interface Indicator extends BaseProduct {

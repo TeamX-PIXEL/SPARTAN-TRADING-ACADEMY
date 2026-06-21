@@ -24,6 +24,8 @@ class Course(Base):
     purchased_count = Column(Integer, default=0)
     status = Column(String(50), default="upcoming")
     completed_at = Column(DateTime, nullable=True)
+    discord_channel_id = Column(String(255), nullable=True)
+    discord_renewal_price = Column(Float, nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

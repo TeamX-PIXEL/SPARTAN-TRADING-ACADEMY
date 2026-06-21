@@ -81,6 +81,7 @@ export const API = {
       difficulty: c.difficulty || "Beginner",
       scheduled_at: c.scheduled_at,
       estimated_duration: c.estimated_duration,
+      discord_renewal_price: c.discord_renewal_price ?? undefined,
     }));
     return { items, hasMore: skip + limit < (d.total || items.length) };
   },
@@ -146,6 +147,7 @@ export const API = {
       difficulty: c.difficulty || "Beginner",
       scheduled_at: c.scheduled_at,
       estimated_duration: c.estimated_duration,
+      discord_renewal_price: c.discord_renewal_price ?? undefined,
     };
   },
 
@@ -265,6 +267,7 @@ export const API = {
         duration: "1 Month",
         lecturer: "TBA",
         difficulty: "Beginner" as const,
+        discord_renewal_price: c.discord_renewal_price ?? undefined,
       })),
       indicators: (d.indicators || []).map((i: any) => ({
         id: i.indicator_id,

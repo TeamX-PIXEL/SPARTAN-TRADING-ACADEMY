@@ -487,6 +487,8 @@ def get_my_library(
                     txn.expiry.isoformat() if txn and txn.expiry else None
                 ),
                 "purchased_at": txn.created_at.isoformat() if txn else None,
+                "discord_channel_id": c.discord_channel_id,
+                "discord_renewal_price": c.discord_renewal_price,
             })
 
     indicators = []

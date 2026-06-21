@@ -312,6 +312,8 @@ def get_public_courses(
             "scheduled_at": c.scheduled_at.isoformat() if c.scheduled_at else None,
             "estimated_duration": None,
             "course_thumbnail": c.course_thumbnail,
+            "discord_channel_id": c.discord_channel_id,
+            "discord_renewal_price": c.discord_renewal_price,
         })
 
     return {"courses": items, "total": total, "skip": skip, "limit": limit}
@@ -352,6 +354,8 @@ def get_public_course(
         "estimated_duration": None,
         "course_thumbnail": c.course_thumbnail,
         "is_purchased": is_purchased,
+        "discord_channel_id": c.discord_channel_id,
+        "discord_renewal_price": c.discord_renewal_price,
     }
 
 

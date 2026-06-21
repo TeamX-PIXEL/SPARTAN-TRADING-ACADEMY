@@ -44,6 +44,8 @@ interface FormState {
   difficulty: Difficulty;
   scheduled_at: string;
   image: string;
+  discord_channel_id: string;
+  discord_renewal_price: string;
 }
 
 const EMPTY: FormState = {
@@ -59,6 +61,8 @@ const EMPTY: FormState = {
   difficulty: "Beginner",
   scheduled_at: "",
   image: "",
+  discord_channel_id: "",
+  discord_renewal_price: "",
 };
 
 function isoToLocalInput(iso?: string): string {
@@ -103,6 +107,8 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
         difficulty: course.difficulty,
         scheduled_at: isoToLocalInput(course.scheduled_at),
         image: course.image,
+        discord_channel_id: course.discord_channel_id ?? "",
+        discord_renewal_price: course.discord_renewal_price != null ? String(course.discord_renewal_price) : "",
       });
       setImagePreview(course.image || null);
       setIdTaken(false);
@@ -163,6 +169,8 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
       lecturer: form.lecturer.trim() || "TBA",
       difficulty: form.difficulty,
       scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : "",
+      discord_channel_id: form.discord_channel_id.trim() || undefined,
+      discord_renewal_price: form.discord_renewal_price ? parseFloat(form.discord_renewal_price) || undefined : undefined,
     };
 
     if (isEdit && course) {
@@ -269,6 +277,31 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
                 value={form.scheduled_at}
                 onChange={(e) => set("scheduled_at", e.target.value)}
               />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cf-discord-id">Discord Channel / Group ID</Label>
+              <Input
+                id="cf-discord-id"
+                value={form.discord_channel_id}
+                onChange={(e) => set("discord_channel_id", e.target.value)}
+                placeholder="e.g. 1234567890123456789"
+              />
+              <p className="text-[11px] text-muted-foreground">Private Discord server or group ID for this course.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cf-discord-renewal">Discord Renewal Price (INR)</Label>
+              <Input
+                id="cf-discord-renewal"
+                type="number"
+                min={0}
+                value={form.discord_renewal_price}
+                onChange={(e) => set("discord_renewal_price", e.target.value)}
+                placeholder="e.g. 4092"
+              />
+              <p className="text-[11px] text-muted-foreground">1-year Discord support renewal price shown to clients.</p>
             </div>
           </div>
 

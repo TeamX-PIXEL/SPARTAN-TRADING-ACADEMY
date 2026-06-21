@@ -27,6 +27,8 @@ export interface Course {
   purchased_count: number;
   status: CourseStatus;
   completed_at?: string;
+  discord_channel_id?: string;
+  discord_renewal_price?: number;
 }
 
 export type LessonType = "youtube" | "zoom" | "meet";
@@ -130,6 +132,8 @@ function mapCourse(raw: any): Course {
     purchased_count: raw.purchased_count ?? 0,
     status: raw.status ?? "upcoming",
     completed_at: raw.completed_at ?? undefined,
+    discord_channel_id: raw.discord_channel_id ?? undefined,
+    discord_renewal_price: raw.discord_renewal_price ?? undefined,
   };
 }
 
@@ -357,6 +361,8 @@ export const useAcademyStore = create<AcademyState>((set, get) => ({
       lecturer: courseData.lecturer,
       difficulty: courseData.difficulty,
       scheduled_at: courseData.scheduled_at || null,
+      discord_channel_id: courseData.discord_channel_id || undefined,
+      discord_renewal_price: courseData.discord_renewal_price ?? undefined,
     };
 
     try {
@@ -389,6 +395,8 @@ export const useAcademyStore = create<AcademyState>((set, get) => ({
     if (patch.difficulty !== undefined) payload.difficulty = patch.difficulty;
     if (patch.scheduled_at !== undefined) payload.scheduled_at = patch.scheduled_at;
     if (patch.completed_at !== undefined) payload.completed_at = patch.completed_at;
+    if (patch.discord_channel_id !== undefined) payload.discord_channel_id = patch.discord_channel_id;
+    if (patch.discord_renewal_price !== undefined) payload.discord_renewal_price = patch.discord_renewal_price;
 
     try {
       const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}`, {

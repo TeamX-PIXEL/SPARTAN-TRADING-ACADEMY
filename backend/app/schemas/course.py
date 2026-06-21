@@ -18,6 +18,8 @@ class CourseBase(BaseModel):
     scheduled_at: Optional[datetime] = None
     purchased_count: int = 0
     course_thumbnail: Optional[str] = None
+    discord_channel_id: Optional[str] = None
+    discord_renewal_price: Optional[float] = None
 
 
 class CourseCreate(CourseBase):

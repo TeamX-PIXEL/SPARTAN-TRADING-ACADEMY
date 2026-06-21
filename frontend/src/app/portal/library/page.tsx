@@ -141,7 +141,6 @@ export const LibraryPage: React.FC = () => {
   
   // Modal renewal states
   const [renewingProduct, setRenewingProduct] = useState<{ id: string; title: string; price: number; section: "Indicator" | "Bot" } | null>(null);
-  const [selectedDuration, setSelectedDuration] = useState<1 | 12>(1); // 1 Month or 1 Year
 
   // Discord support extension states
   const [renewingDiscordCourse, setRenewingDiscordCourse] = useState<Course | null>(null);
@@ -199,13 +198,12 @@ export const LibraryPage: React.FC = () => {
     }
   }, [library.courses]);
 
-  // Handle License renewal
+  // Handle License renewal (Bots & Indicators — 30 days only)
   const handleRenewLicense = async () => {
     if (!renewingProduct) return;
     try {
-      const basePrice = renewingProduct.price;
-      const price = selectedDuration === 1 ? Math.round(basePrice / 12) : basePrice;
-      const durationDays = selectedDuration === 1 ? 30 : 365;
+      const price = renewingProduct.price;
+      const durationDays = 30;
 
       addToast(`Processing ₹${price.toLocaleString('en-IN')} license extension for "${renewingProduct.title}"...`, "info");
       
@@ -225,7 +223,7 @@ export const LibraryPage: React.FC = () => {
   const handleRenewDiscord = async () => {
     if (!renewingDiscordCourse) return;
     try {
-      const price = Math.round(renewingDiscordCourse.price * 2);
+      const price = renewingDiscordCourse.discord_renewal_price ?? Math.round(renewingDiscordCourse.price * 2);
       addToast(`Processing ₹${price.toLocaleString('en-IN')} invoice for Discord support 1-Year renewal...`, "info");
       
       // Save days-left persistently
@@ -1188,9 +1186,7 @@ export const LibraryPage: React.FC = () => {
 
       {/* RENEWAL MODAL DIALOG OVERLAY */}
       {renewingProduct && (() => {
-        const monthPrice = Math.round(renewingProduct.price / 12);
-        const yearPrice = renewingProduct.price;
-        const activePrice = selectedDuration === 1 ? monthPrice : yearPrice;
+        const price = renewingProduct.price;
         return (
         <div className="fixed inset-0 bg-[#07080a]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">
@@ -1205,43 +1201,12 @@ export const LibraryPage: React.FC = () => {
               Renew subscription and synchronized binaries for <span className="text-white font-bold font-sans">"{renewingProduct.title}"</span>. Extensions apply instantly to your account.
             </p>
 
-            <div className="space-y-2">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Select Renewal Period:</span>
-              
-              <div className="grid grid-cols-2 gap-3">
-                {/* 1 Month option */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedDuration(1)}
-                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer ${
-                    selectedDuration === 1 
-                      ? 'bg-blue-950/40 border-blue-500 text-white font-bold' 
-                      : 'bg-[#12151c]/50 border-[#1e222b] text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <span className="text-xs">30 Days Boost</span>
-                  <span className="font-mono text-sm tracking-tight text-blue-400 font-black">₹{monthPrice.toLocaleString('en-IN')}</span>
-                </button>
-
-                {/* 1 Year Option */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedDuration(12)}
-                  className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all text-center cursor-pointer ${
-                    selectedDuration === 12 
-                      ? 'bg-blue-950/40 border-blue-500 text-white font-bold' 
-                      : 'bg-[#12151c]/50 border-[#1e222b] text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <span className="text-xs">1 Year Standard</span>
-                  <span className="font-mono text-sm tracking-tight text-blue-400 font-black">₹{yearPrice.toLocaleString('en-IN')}</span>
-                </button>
-              </div>
-            </div>
-
             <div className="p-3 bg-[#12151c] rounded-xl border border-[#1e222b] flex justify-between items-center text-xs">
-              <span className="text-neutral-500 font-sans">Total Due:</span>
-              <span className="font-mono font-black text-white text-sm">₹{activePrice.toLocaleString('en-IN')} INR</span>
+              <div>
+                <span className="text-[10px] text-blue-400 font-mono font-bold block uppercase tracking-wide">RENEWAL PERIOD</span>
+                <span className="text-neutral-300 font-sans">30 Days License Extension</span>
+              </div>
+              <span className="font-mono font-black text-blue-400 text-sm">₹{price.toLocaleString('en-IN')}</span>
             </div>
 
             {/* Actions */}
@@ -1269,7 +1234,7 @@ export const LibraryPage: React.FC = () => {
 
       {/* DISCORD SUPPORT RENEWAL MODAL */}
       {renewingDiscordCourse && (() => {
-        const discordPrice = Math.round(renewingDiscordCourse.price * 2);
+        const discordPrice = renewingDiscordCourse.discord_renewal_price ?? Math.round(renewingDiscordCourse.price * 2);
         return (
         <div className="fixed inset-0 bg-[#07080a]/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-2xl">

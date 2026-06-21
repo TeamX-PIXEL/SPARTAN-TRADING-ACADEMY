@@ -11,6 +11,7 @@ import {
   ChevronsRightIcon,
   EllipsisVertical,
   GraduationCap,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,6 +51,7 @@ import {
 } from "@/lib/academy-store";
 
 import { CourseThumb } from "./course-thumb";
+import { CourseFormDialog } from "./course-form-dialog";
 
 interface Props {
   courses: Course[];
@@ -65,6 +67,8 @@ export function OngoingCoursesTable({ courses }: Props) {
   const [pageSize, setPageSize] = React.useState(10);
   const [confirmDoneOpen, setConfirmDoneOpen] = React.useState(false);
   const [confirmDoneCourse, setConfirmDoneCourse] = React.useState<Course | null>(null);
+  const [editing, setEditing] = React.useState<Course | null>(null);
+  const [editOpen, setEditOpen] = React.useState(false);
 
   const pageCount = Math.ceil(courses.length / pageSize);
   const pagedCourses = courses.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
@@ -80,6 +84,11 @@ export function OngoingCoursesTable({ courses }: Props) {
   }
   function memberCount(courseId: number) {
     return members.filter((m) => m.courseId === courseId).length;
+  }
+
+  function openEdit(course: Course) {
+    setEditing(course);
+    setEditOpen(true);
   }
 
   return (
@@ -140,6 +149,10 @@ export function OngoingCoursesTable({ courses }: Props) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem onSelect={() => openEdit(course)}>
+                          <Pencil className="mr-2 size-4" />
+                          Edit Course
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => goLessonsManage(course.id)}>
                           <GraduationCap className="mr-2 size-4" />
                           Manage Lessons
@@ -274,6 +287,8 @@ export function OngoingCoursesTable({ courses }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CourseFormDialog open={editOpen} onOpenChange={setEditOpen} course={editing} />
     </>
   );
 }
