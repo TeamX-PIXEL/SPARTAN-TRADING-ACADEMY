@@ -407,6 +407,22 @@ export const API = {
     return { success: true, expiration: d.expiration };
   },
 
+  // POST /renew-discord
+  async renewDiscord(courseId: string, price: number): Promise<{ success: boolean; message: string }> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/renew-discord`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        course_id: courseId,
+        amount: price,
+        method: "Card",
+      }),
+    });
+    if (!res.ok) throw new Error("Discord renewal failed");
+    const d = await res.json();
+    return { success: true, message: d.message };
+  },
+
   // POST /api/admin/courses/:course_id/lessons (admin add lesson)
   async adminAddLesson(courseId: string, title: string, type: 'youtube' | 'zoom' | 'meet', link: string, startTime?: string): Promise<Lesson> {
     const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${courseId}/lessons`, {

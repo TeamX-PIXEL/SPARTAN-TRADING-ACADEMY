@@ -10,7 +10,7 @@ from app.models import (
     User, Course, Indicator, Bot, Transaction,
     CourseMember, IndicatorMember, BotMember,
 )
-from app.schemas import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest
+from app.schemas import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest, DiscordRenewRequest
 from app.core.deps import get_current_user, get_current_admin
 
 router = APIRouter(prefix="", tags=["Transactions"])
@@ -597,7 +597,7 @@ def get_my_transactions(
             "product_id": product_id,
             "productTitle": product_title,
             "productImage": product_image or "https://picsum.photos/seed/default/600/400",
-            "type": "Purchase",
+            "type": txn.type or "Purchase",
             "amount": txn.amount,
             "status": "SUCCESSFUL",
             "tvid": current_user.tvid or "",
@@ -697,6 +697,7 @@ def purchase_item(
         expiry=expiry_date,
         amount=payload.amount,
         method=payload.method or "Card",
+        type="Purchase",
         status="completed",
     )
     db.add(txn)
@@ -797,6 +798,7 @@ def renew_product(
         expiry=new_expiry,
         amount=payload.amount,
         method=payload.method or "Card",
+        type="Renewal",
         status="completed",
     )
     db.add(txn)
@@ -805,4 +807,38 @@ def renew_product(
     return {
         "success": True,
         "expiration": new_expiry.isoformat(),
+    }
+
+
+# ==========================================
+# USER-FACING: DISCORD RENEWAL
+# ==========================================
+@router.post("/renew-discord")
+def renew_discord(
+    payload: DiscordRenewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Renew Discord support for a course (1 year extension)."""
+    course = db.query(Course).filter(Course.course_id == payload.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # Create renewal transaction
+    txn = Transaction(
+        username=current_user.UserID,
+        product_section="Course",
+        course_id=payload.course_id,
+        expiry=None,
+        amount=payload.amount,
+        method=payload.method or "Card",
+        type="Renewal",
+        status="completed",
+    )
+    db.add(txn)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Discord support renewed for {course.title}",
     }

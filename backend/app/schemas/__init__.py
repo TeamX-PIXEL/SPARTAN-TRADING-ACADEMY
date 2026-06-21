@@ -18,7 +18,7 @@ from app.schemas.indicator import (
     AddIndicatorMemberRequest,
 )
 from app.schemas.bot import BotBase, BotCreate, BotUpdate, BotResponse, BotPublicResponse, BotMemberResponse, BotMemberUpdate, AddBotMemberRequest
-from app.schemas.transaction import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest
+from app.schemas.transaction import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest, DiscordRenewRequest
 
 __all__ = [
     "UserCreate", "UserLogin", "UserResponse", "UserPasswordUpdate", "VerifyEmailRequest", "ResendVerificationRequest",
@@ -34,5 +34,5 @@ __all__ = [
     "IndicatorMemberCreate", "IndicatorMemberUpdate", "IndicatorMemberResponse",
     "AddIndicatorMemberRequest",
     "BotBase", "BotCreate", "BotUpdate", "BotResponse", "BotPublicResponse", "BotMemberResponse", "BotMemberUpdate", "AddBotMemberRequest",
-    "TransactionCreate", "TransactionResponse", "PurchaseRequest", "RenewRequest",
+    "TransactionCreate", "TransactionResponse", "PurchaseRequest", "RenewRequest", "DiscordRenewRequest",
 ]

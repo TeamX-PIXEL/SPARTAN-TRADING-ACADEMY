@@ -12,6 +12,7 @@ class TransactionCreate(BaseModel):
     expiry: Optional[datetime] = None
     amount: float = 0
     method: Optional[str] = None
+    type: str = "Purchase"  # Purchase or Renewal
     status: str = "completed"
 
 
@@ -30,6 +31,12 @@ class RenewRequest(BaseModel):
     method: Optional[str] = "Card"
 
 
+class DiscordRenewRequest(BaseModel):
+    course_id: str
+    amount: float = 0
+    method: Optional[str] = "Card"
+
+
 class TransactionResponse(BaseModel):
     id: int
     username: str
@@ -40,6 +47,7 @@ class TransactionResponse(BaseModel):
     expiry: Optional[datetime] = None
     amount: float
     method: Optional[str] = None
+    type: str = "Purchase"
     status: str
     created_at: datetime
 

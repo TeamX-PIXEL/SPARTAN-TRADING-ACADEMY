@@ -56,12 +56,56 @@ export const HistoryPage: React.FC = () => {
     fetchTransactions();
   }, [user]);
 
-  // Mock receipt download simulation
-  const handleDownloadInvoice = (txId: string) => {
-    addToast(`Constructing digital invoice PDF for transaction ${txId}...`, "info");
-    setTimeout(() => {
-        addToast(`Invoice downloaded successfully!`, "success");
-    }, 1200);
+  // Generate printable invoice
+  const handleDownloadInvoice = (tx: Transaction) => {
+    const invoiceHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Invoice ${tx.id}</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; color: #1a1a1a; }
+  .header { border-bottom: 3px solid #2563eb; padding-bottom: 16px; margin-bottom: 24px; }
+  .header h1 { color: #2563eb; margin: 0; font-size: 22px; }
+  .header p { color: #666; margin: 4px 0 0; font-size: 12px; }
+  .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .value { font-weight: 600; font-size: 14px; }
+  .divider { border-top: 1px solid #e5e7eb; margin: 16px 0; }
+  .total { font-size: 20px; font-weight: 800; color: #2563eb; }
+  .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #999; text-align: center; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge-success { background: #dcfce7; color: #166534; }
+  @media print { body { margin: 0; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Spartan Trading Academy</h1>
+    <p>Invoice #${tx.id} &bull; Generated ${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+  </div>
+  <div class="row"><span class="label">Product</span><span class="value">${tx.productTitle}</span></div>
+  <div class="row"><span class="label">Category</span><span class="value">${tx.product_section}</span></div>
+  <div class="row"><span class="label">Type</span><span class="value">${tx.type}</span></div>
+  <div class="row"><span class="label">Date</span><span class="value">${new Date(tx.date).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+  <div class="row"><span class="label">Payment Method</span><span class="value">${tx.method || 'Card'}</span></div>
+  <div class="row"><span class="label">Status</span><span class="value"><span class="badge badge-success">${tx.status}</span></span></div>
+  <div class="divider"></div>
+  <div class="row"><span class="label">Amount Charged</span><span class="total">₹${tx.amount.toLocaleString('en-IN')} INR</span></div>
+  <div class="footer">
+    <p>Spartan Trading Academy &bull; PCI-DSS Compliant Payment Gateway</p>
+    <p>For support, contact billing@spartanacademy.in</p>
+  </div>
+</body>
+</html>`;
+    const blob = new Blob([invoiceHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if (w) {
+      w.onload = () => { w.print(); };
+    }
+    addToast(`Invoice ${tx.id} opened for print/download.`, "success");
   };
 
   // Classify each transaction based on product_section from backend
@@ -332,7 +376,7 @@ export const HistoryPage: React.FC = () => {
                         
                         <button
                           type="button"
-                          onClick={() => handleDownloadInvoice(tx.id)}
+                          onClick={() => handleDownloadInvoice(tx)}
                           className="p-1.5 bg-[#12151c] hover:bg-[#1e222b] border border-[#1e222b] rounded-lg text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
                           title="Download PDF Invoice"
                         >

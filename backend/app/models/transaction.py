@@ -15,5 +15,6 @@ class Transaction(Base):
     expiry = Column(DateTime, nullable=True)
     amount = Column(Float, default=0)
     method = Column(String(50), nullable=True)
+    type = Column(String(20), default="Purchase")  # Purchase or Renewal
     status = Column(String(20), default="completed")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -219,52 +219,27 @@ export const LibraryPage: React.FC = () => {
     }
   };
 
-  // Handle Discord support renewal
+  // Handle Discord support renewal (real backend)
   const handleRenewDiscord = async () => {
     if (!renewingDiscordCourse) return;
     try {
       const price = renewingDiscordCourse.discord_renewal_price ?? Math.round(renewingDiscordCourse.price * 2);
       addToast(`Processing ₹${price.toLocaleString('en-IN')} invoice for Discord support 1-Year renewal...`, "info");
-      
-      // Save days-left persistently
-      setDiscordSupportDaysLeft(prev => {
-        const next = {
-          ...prev,
-          [renewingDiscordCourse.id]: (prev[renewingDiscordCourse.id] || 365) + 365
-        };
-        localStorage.setItem('dealdeck_discord_days', JSON.stringify(next));
-        return next;
-      });
-      
-      // Generate standard transaction
-      const simulatedTx: Transaction = {
-        id: `TX-${Math.floor(1001 + Math.random() * 8999)}-${Math.floor(10 + Math.random() * 89)}`,
-        date: new Date().toISOString(),
-        product_id: renewingDiscordCourse.id,
-        productTitle: `${renewingDiscordCourse.title} (Discord 1-Yr Support Renewal)`,
-        productImage: renewingDiscordCourse.image,
-        type: 'Renewal',
-        amount: price,
-        status: 'SUCCESSFUL',
-        tvid: user?.tvid || 'stoic_trader',
-        product_section: 'Course',
-      };
-      
-      // Save persistently in the general transaction list
-      await API.saveTransaction(simulatedTx);
-      
-      // Update local state reactively
-      setTransactions(prev => [simulatedTx, ...prev]);
 
-      addNotification(
-        "Discord Support Extension Confirmed",
-        `Your Discord Support for "${renewingDiscordCourse.title}" has been successfully extended for another 365 days! Access token is synced.`,
-        "lesson",
-        "/library"
-      );
+      const res = await API.renewDiscord(renewingDiscordCourse.id, price);
+      
+      if (res.success) {
+        addNotification(
+          "Discord Support Extension Confirmed",
+          `Your Discord Support for "${renewingDiscordCourse.title}" has been successfully extended for another 365 days! Access token is synced.`,
+          "lesson",
+          "/library"
+        );
 
-      addToast(`Successfully extended Discord Support! +365 Days Access Added.`, "success");
-      setRenewingDiscordCourse(null);
+        addToast(`Successfully extended Discord Support! +365 Days Access Added.`, "success");
+        setRenewingDiscordCourse(null);
+        fetchLibraryDetails();
+      }
     } catch (e) {
       addToast("Discord support extension failed.", "error");
     }
