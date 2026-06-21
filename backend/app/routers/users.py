@@ -25,6 +25,7 @@ class UserProfileUpdate(BaseModel):
     firstname: Optional[str] = None
     lastname: Optional[str] = None
     tvid: Optional[str] = None
+    phone_number: Optional[str] = None
     telegram_user_id: Optional[str] = None
     telegram_chat_id: Optional[str] = None
     discord_user_id: Optional[str] = None
@@ -68,6 +69,8 @@ def update_my_profile(
         current_user.lastname = update.lastname
     if update.tvid is not None:
         current_user.tvid = update.tvid
+    if update.phone_number is not None:
+        current_user.phone_number = update.phone_number
     if update.telegram_user_id is not None:
         current_user.telegram_user_id = update.telegram_user_id
     if update.telegram_chat_id is not None:

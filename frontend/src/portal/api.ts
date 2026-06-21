@@ -34,6 +34,7 @@ export const API = {
     if (updates.tvid !== undefined) body.tvid = updates.tvid;
     if (updates.firstname !== undefined) body.firstname = updates.firstname;
     if (updates.lastname !== undefined) body.lastname = updates.lastname;
+    if (updates.phone_number !== undefined) body.phone_number = updates.phone_number;
     if (updates.telegram_user_id !== undefined) body.telegram_user_id = updates.telegram_user_id;
     if (updates.telegram_chat_id !== undefined) body.telegram_chat_id = updates.telegram_chat_id;
     if (updates.discord_user_id !== undefined) body.discord_user_id = updates.discord_user_id;

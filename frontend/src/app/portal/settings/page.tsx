@@ -16,7 +16,7 @@ export const SettingsPage: React.FC = () => {
   // Local Form state
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('+1 (555) 0168-912');
+  const [mobileNumber, setMobileNumber] = useState('');
   const [tvid, setTvid] = useState('');
   const [telegramUserId, setTelegramUserId] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
@@ -46,6 +46,7 @@ export const SettingsPage: React.FC = () => {
     if (user) {
       setName(user.name);
       setEmail(user.email);
+      setMobileNumber(user.phone_number || '');
       setTvid(user.tvid || '');
       setTelegramUserId(user.telegram_user_id || '');
       setTelegramChatId(user.telegram_chat_id || '');
