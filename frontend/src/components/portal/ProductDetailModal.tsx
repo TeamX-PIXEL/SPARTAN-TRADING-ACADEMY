@@ -25,7 +25,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ onClose 
   const [isPurchased, setIsPurchased] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Fetch product from backend using search
+  // Fetch product from backend using single-item endpoints
   useEffect(() => {
     if (!productId) {
       setProduct(null);
@@ -38,54 +38,44 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ onClose 
     const fetchProduct = async () => {
       setIsLoading(true);
       try {
-        // Use purchasedIds to determine type
+        // If purchased, we already know the type from purchasedIds
         if (purchasedIds.courses.includes(productId)) {
-          const { items } = await API.getCourses(0, 100);
-          const found = items.find(c => c.id === productId);
+          const found = await API.getCourseById(productId);
           if (!cancelled && found) {
             setProduct(found);
             setProductType('course');
             setIsPurchased(true);
           }
         } else if (purchasedIds.indicators.includes(productId)) {
-          const { items } = await API.getIndicators(0, 100);
-          const found = items.find(i => i.id === productId);
+          const found = await API.getIndicatorById(productId);
           if (!cancelled && found) {
             setProduct(found);
             setProductType('indicator');
             setIsPurchased(true);
           }
         } else if (purchasedIds.bots.includes(productId)) {
-          const { items } = await API.getBots(0, 100);
-          const found = items.find(b => b.id === productId);
+          const found = await API.getBotById(productId);
           if (!cancelled && found) {
             setProduct(found);
             setProductType('bot');
             setIsPurchased(true);
           }
         } else {
-          // Not purchased — try all catalogs
-          const [coursesRes, indicatorsRes, botsRes] = await Promise.all([
-            API.getCourses(0, 100),
-            API.getIndicators(0, 100),
-            API.getBots(0, 100),
-          ]);
-          if (cancelled) return;
-
-          const foundCourse = coursesRes.items.find(c => c.id === productId);
-          if (foundCourse) {
+          // Not purchased — try each endpoint sequentially
+          const foundCourse = await API.getCourseById(productId);
+          if (!cancelled && foundCourse) {
             setProduct(foundCourse);
             setProductType('course');
             setIsPurchased(false);
-          } else {
-            const foundInd = indicatorsRes.items.find(i => i.id === productId);
-            if (foundInd) {
+          } else if (!cancelled) {
+            const foundInd = await API.getIndicatorById(productId);
+            if (!cancelled && foundInd) {
               setProduct(foundInd);
               setProductType('indicator');
               setIsPurchased(false);
-            } else {
-              const foundBot = botsRes.items.find(b => b.id === productId);
-              if (foundBot) {
+            } else if (!cancelled) {
+              const foundBot = await API.getBotById(productId);
+              if (!cancelled && foundBot) {
                 setProduct(foundBot);
                 setProductType('bot');
                 setIsPurchased(false);
@@ -366,7 +356,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ onClose 
               <div className="flex w-full items-center justify-between">
                 <div className="flex flex-col font-mono">
                   <span className="text-[9px] text-[#4e5a70] uppercase font-bold tracking-widest">ONE TIME FEE</span>
-                  <span className="text-base font-black text-white">${product.price}</span>
+                  <span className="text-base font-black text-white">₹{product.price}</span>
                 </div>
 
                 <button

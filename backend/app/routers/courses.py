@@ -282,9 +282,17 @@ def get_public_courses(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(_get_optional_user),
 ):
-    """Returns courses visible to public."""
-    total = db.query(Course).count()
-    courses = db.query(Course).offset(skip).limit(limit).all()
+    """Returns upcoming courses visible to public, ordered by scheduled_at."""
+    from datetime import timedelta
+    now = datetime.now()
+    five_min_from_now = now + timedelta(minutes=5)
+
+    query = db.query(Course).filter(
+        Course.scheduled_at > five_min_from_now
+    ).order_by(Course.scheduled_at.asc())
+
+    total = query.count()
+    courses = query.offset(skip).limit(limit).all()
 
     items = []
     for c in courses:

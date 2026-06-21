@@ -127,6 +127,68 @@ export const API = {
     return { items, hasMore: items.length === limit };
   },
 
+  // GET /public/courses/{course_id}
+  async getCourseById(courseId: string): Promise<Course | null> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/public/courses/${courseId}`);
+    if (!res.ok) return null;
+    const c = await res.json();
+    return {
+      id: c.course_id || c.id,
+      title: c.title,
+      description: c.description,
+      longDescription: c.longDescription || c.description,
+      price: c.price,
+      image: c.image || c.course_thumbnail || "",
+      category: c.category || "Masterclass",
+      features: c.features || [],
+      duration: c.duration || "1 Month",
+      lecturer: c.lecturer || "TBA",
+      difficulty: c.difficulty || "Beginner",
+      scheduled_at: c.scheduled_at,
+      estimated_duration: c.estimated_duration,
+    };
+  },
+
+  // GET /public/indicators/{indicator_id}
+  async getIndicatorById(indicatorId: string): Promise<Indicator | null> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/public/indicators/${indicatorId}`);
+    if (!res.ok) return null;
+    const i = await res.json();
+    return {
+      id: i.indicator_id || i.id,
+      title: i.title,
+      description: i.description,
+      longDescription: i.longDescription || i.description,
+      price: i.price,
+      image: i.image || "",
+      category: i.category || "Scripts",
+      features: i.features || [],
+      scriptType: i.scriptType || "Pine Script",
+      accuracy: i.accuracy,
+      timeframe: i.timeframe,
+    };
+  },
+
+  // GET /public/bots/{bot_id}
+  async getBotById(botId: string): Promise<Bot | null> {
+    const res = await fetchWithAuth(`${API_BASE_URL}/public/bots/${botId}`);
+    if (!res.ok) return null;
+    const b = await res.json();
+    return {
+      id: b.bot_id || b.id,
+      title: b.title,
+      description: b.description,
+      longDescription: b.description,
+      price: b.price,
+      image: b.image || "",
+      category: b.category || "Trading Bot",
+      features: b.features || [],
+      exchange: b.exchange || "Binance",
+      apy: b.apy || "—",
+      status: b.status,
+    };
+  },
+
   // GET /search?q=
   async searchCatalog(query: string): Promise<{ courses: Course[]; indicators: Indicator[]; bots: Bot[] }> {
     const res = await fetchWithAuth(`${API_BASE_URL}/search?q=${encodeURIComponent(query)}`);

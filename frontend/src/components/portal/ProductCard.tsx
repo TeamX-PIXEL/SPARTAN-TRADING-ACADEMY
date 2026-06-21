@@ -172,7 +172,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, type, purchas
           ) : (
             <div className="flex flex-col font-mono">
               <span className="text-[9px] text-[#4e5a70] uppercase tracking-widest font-bold">ONE-TIME LOCK</span>
-              <span className="text-sm font-bold text-white">${product.price}</span>
+              <span className="text-sm font-bold text-white">₹{product.price}</span>
             </div>
           )}
 
