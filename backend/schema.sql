@@ -264,6 +264,21 @@ CREATE TABLE IF NOT EXISTS admin_users (
 -- users — ALTER TABLE migrations
 -- ============================================================================
 
+-- Add columns that may not exist yet
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'users' AND column_name = 'firstname') = 0,
+    'ALTER TABLE users ADD COLUMN firstname VARCHAR(255) DEFAULT \'\' AFTER username',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'users' AND column_name = 'lastname') = 0,
+    'ALTER TABLE users ADD COLUMN lastname VARCHAR(255) DEFAULT \'\' AFTER firstname',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- Add UNIQUE to existing nullable columns
 SET @sql = IF(
     (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'users' AND column_name = 'tvid') > 0,
@@ -376,43 +391,20 @@ SET @sql = IF(
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ============================================================================
--- lessons — ALTER TABLE migrations (formerly course_chapters)
+-- lessons (managed by SQLAlchemy Lesson model)
 -- ============================================================================
 
-SET @sql = IF(
-    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'lessons' AND column_name = 'type') = 0,
-    'ALTER TABLE lessons ADD COLUMN type VARCHAR(50) DEFAULT ''video'' AFTER content',
-    'SELECT 1'
+CREATE TABLE IF NOT EXISTS lessons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    course_id INT,
+    title VARCHAR(255),
+    type VARCHAR(50) DEFAULT 'youtube',
+    link TEXT,
+    duration VARCHAR(50),
+    start_time DATETIME,
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @sql = IF(
-    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'lessons' AND column_name = 'link') = 0,
-    'ALTER TABLE lessons ADD COLUMN link TEXT AFTER type',
-    'SELECT 1'
-);
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @sql = IF(
-    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'lessons' AND column_name = 'duration') = 0,
-    'ALTER TABLE lessons ADD COLUMN duration INT DEFAULT 0 AFTER link',
-    'SELECT 1'
-);
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @sql = IF(
-    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'lessons' AND column_name = 'start_time') = 0,
-    'ALTER TABLE lessons ADD COLUMN start_time DATETIME AFTER duration',
-    'SELECT 1'
-);
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-
-SET @sql = IF(
-    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'lessons' AND column_name = 'added_at') = 0,
-    'ALTER TABLE lessons ADD COLUMN added_at DATETIME DEFAULT CURRENT_TIMESTAMP AFTER start_time',
-    'SELECT 1'
-);
-PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Drop old tables that are no longer needed
 DROP TABLE IF EXISTS course_waitlist;

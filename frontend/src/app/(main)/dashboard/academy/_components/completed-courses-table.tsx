@@ -125,7 +125,7 @@ export function CompletedCoursesTable({ courses }: Props) {
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="tabular-nums">
-                      {memberCount(course.id)}
+                      {course.purchased_count ?? 0}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -244,7 +244,7 @@ export function CompletedCoursesTable({ courses }: Props) {
         </div>
       </div>
 
-      <CourseFormDialog open={editOpen} onOpenChange={setEditOpen} course={editing} />
+      <CourseFormDialog open={editOpen} onOpenChange={setEditOpen} course={editing} mode="completed" />
     </>
   );
 }

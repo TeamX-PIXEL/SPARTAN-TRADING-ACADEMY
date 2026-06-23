@@ -1,0 +1,6 @@
+1	Courses	/portal/courses	Browse all courses (paginated)
+2	Indicators	/portal/indicators	Browse all indicators (paginated)
+3	Alerts (Bots)	/portal/alerts	Browse all bots (paginated)
+4	Library	/portal/library	Purchased items, lessons, license management, Discord
+5	History	/portal/history	Payment/transaction history with filters
+6	Settings	/portal/settings	Profile (TVID, Telegram, Discord), password change

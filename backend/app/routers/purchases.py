@@ -10,6 +10,7 @@ from app.models import (
     User, Course, Indicator, Bot, Transaction,
     CourseMember, IndicatorMember, BotMember,
 )
+from app.models.admin import AdminUser
 from app.schemas import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest, DiscordRenewRequest
 from app.core.deps import get_current_user, get_current_admin
 
@@ -89,13 +90,19 @@ def list_transactions(
             bot = db.query(Bot).filter(Bot.bot_id == txn.bot_id).first()
             item_name = bot.title if bot else None
 
-        customer = f"{user.firstname or ''} {user.lastname or ''}".strip() if user else txn.username
+        customer_name = f"{user.firstname or ''} {user.lastname or ''}".strip() if user else None
+        if not customer_name:
+            admin_user = db.query(AdminUser).filter(AdminUser.username == txn.username).first()
+            if admin_user:
+                customer_name = "Admin"
+            else:
+                customer_name = txn.username
 
         results.append({
             "id": str(txn.id),
             "date": txn.created_at.isoformat() if txn.created_at else None,
             "section": SECTION_MAP.get(txn.product_section, txn.product_section),
-            "customer": customer or txn.username,
+            "customer": customer_name,
             "item": item_name,
             "amount": txn.amount,
             "method": txn.method,
@@ -252,7 +259,7 @@ def monthly_revenue(
         month_map[key][section_key] = float(r.revenue)
 
     result = []
-    for i in range(months, 0, -1):
+    for i in range(months, -1, -1):
         # Proper calendar month traversal to avoid drift
         year = now.year
         month = now.month - i
@@ -285,6 +292,11 @@ def create_transaction(
     """Create a transaction and upsert the corresponding member record."""
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     section = payload.product_section
+
+    # Validate username belongs to a real client, not an admin
+    admin_match = db.query(AdminUser).filter(AdminUser.username == payload.username).first()
+    if admin_match:
+        raise HTTPException(status_code=400, detail="Cannot create transaction for admin user. Use a client username.")
 
     # Validate product exists and resolve the string ID
     product_id = None
@@ -477,18 +489,31 @@ def get_my_library(
                 Transaction.course_id == c.course_id,
             ).order_by(Transaction.created_at.desc()).first()
 
+            if c.completed_at:
+                computed_status = "completed"
+            elif c.scheduled_at and c.scheduled_at <= datetime.now(timezone.utc).replace(tzinfo=None):
+                computed_status = "ongoing"
+            else:
+                computed_status = "upcoming"
+
             courses.append({
                 "id": c.id,
                 "course_id": c.course_id,
                 "title": c.title,
                 "description": c.description,
-                "thumbnail": c.course_thumbnail,
+                "long_description": c.long_description or c.description,
+                "thumbnail": c.image or c.course_thumbnail,
+                "status": computed_status,
                 "expiry": member.expiry.isoformat() if member and member.expiry else (
                     txn.expiry.isoformat() if txn and txn.expiry else None
                 ),
                 "purchased_at": txn.created_at.isoformat() if txn else None,
                 "discord_channel_id": c.discord_channel_id,
                 "discord_renewal_price": c.discord_renewal_price,
+                "scheduled_at": c.scheduled_at.isoformat() if c.scheduled_at else None,
+                "lecturer": c.lecturer,
+                "difficulty": c.difficulty,
+                "duration_months": c.duration_months,
             })
 
     indicators = []
@@ -647,11 +672,12 @@ def purchase_item(
     current_user: User = Depends(get_current_user),
 ):
     """Purchase a course, indicator, or bot."""
-    if not current_user.tvid:
-        raise HTTPException(status_code=400, detail="TVID_REQUIRED")
-
     section = payload.product_section
     product_id = payload.product_id
+
+    # TradingView ID is required only for indicators and bots
+    if section in ("Indicator", "Bot") and not current_user.tvid:
+        raise HTTPException(status_code=400, detail="TVID_REQUIRED")
 
     # Validate product exists
     if section == "Course":

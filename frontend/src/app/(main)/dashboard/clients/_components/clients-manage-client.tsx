@@ -82,7 +82,6 @@ interface EnrolledProduct {
 }
 
 export function ClientsManageClient() {
-  const members = useAcademyStore((s) => s.members);
   const courses = useAcademyStore((s) => s.courses);
   const indicators = useAcademyStore((s) => s.indicators);
   const bots = useAcademyStore((s) => s.bots);
@@ -90,6 +89,7 @@ export function ClientsManageClient() {
   const [users, setUsers] = React.useState<ClientUser[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [clientStats, setClientStats] = React.useState({ total_enrolments: 0, paid_access: 0, free_access: 0 });
 
   const [pageIndex, setPageIndex] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
@@ -143,10 +143,17 @@ export function ClientsManageClient() {
     async function fetchUsers() {
       setLoading(true);
       try {
-        const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/users`);
-        if (res.ok) {
-          const data = await res.json();
+        const [usersRes, statsRes] = await Promise.all([
+          fetchWithAuth(`${API_BASE_URL}/api/admin/users`),
+          fetchWithAuth(`${API_BASE_URL}/api/admin/dashboard/client-stats`),
+        ]);
+        if (usersRes.ok) {
+          const data = await usersRes.json();
           setUsers(data);
+        }
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          setClientStats(stats);
         }
       } catch {
         setUsers([]);
@@ -178,9 +185,9 @@ export function ClientsManageClient() {
     }
   }, [pageIndex, pageCount]);
 
-  const totalMembers = members.length;
-  const paidMembers = members.filter((m) => m.accessType === "paid").length;
-  const freeMembers = members.filter((m) => m.accessType === "free").length;
+  const totalMembers = clientStats.total_enrolments;
+  const paidMembers = clientStats.paid_access;
+  const freeMembers = clientStats.free_access;
 
   function openEdit(user: ClientUser) {
     setEditUser(user);

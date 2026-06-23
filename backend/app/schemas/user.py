@@ -10,6 +10,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     tvid: Optional[str] = None
+    phone_number: Optional[str] = None
 
 
 class UserLogin(BaseModel):

@@ -48,9 +48,9 @@ export function UpcomingSessionsTable({ data, nowIso }: UpcomingSessionsTablePro
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base leading-none">
           <CalendarClock className="size-4" />
-          Upcoming Sessions
+          Course Sessions
         </CardTitle>
-        <CardDescription>Scheduled course sessions, ordered by start time.</CardDescription>
+        <CardDescription>Live and recorded sessions from ongoing courses.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto rounded-md border">
@@ -72,6 +72,7 @@ export function UpcomingSessionsTable({ data, nowIso }: UpcomingSessionsTablePro
               ) : (
                 sorted.map((row) => {
                   const target = new Date(row.scheduled_at);
+                  const isYoutube = row.session_type === "youtube";
                   return (
                     <TableRow key={row.schedule_id}>
                       <TableCell>
@@ -95,7 +96,9 @@ export function UpcomingSessionsTable({ data, nowIso }: UpcomingSessionsTablePro
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium tabular-nums">{formatStartsIn(target, now)}</span>
+                          <span className="font-medium tabular-nums">
+                            {isYoutube ? "Published" : formatStartsIn(target, now)}
+                          </span>
                           <span className="text-muted-foreground text-xs tabular-nums">{target.toLocaleString()}</span>
                         </div>
                       </TableCell>

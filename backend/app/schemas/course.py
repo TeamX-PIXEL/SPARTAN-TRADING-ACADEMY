@@ -31,6 +31,7 @@ class CourseResponse(CourseBase):
     status: str = "upcoming"
     completed_at: Optional[datetime] = None
     created_at: datetime
+    lesson_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -62,6 +62,30 @@ def get_all_users(db: Session = Depends(get_db), current_admin=Depends(get_curre
     return [_user_to_dict(u) for u in users]
 
 
+@router.get("/users/search")
+def search_users_admin(q: str, current_admin=Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Search users by @username prefix, name, or email."""
+    query = q.strip().lstrip("@")
+
+    users = db.query(User).filter(
+        (User.UserID.ilike(f"{query}%")) |
+        (User.firstname.ilike(f"%{query}%")) |
+        (User.lastname.ilike(f"%{query}%")) |
+        (User.email.ilike(f"%{query}%"))
+    ).limit(8).all()
+
+    return [
+        {
+            "id": u.id,
+            "username": u.UserID or "",
+            "name": f"{u.firstname or ''} {u.lastname or ''}".strip() or u.UserID or "",
+            "email": u.email or "",
+            "tvid": u.tvid or "",
+        }
+        for u in users
+    ]
+
+
 @router.get("/users/check-username/{username}")
 def check_username(username: str, db: Session = Depends(get_db), current_admin=Depends(get_current_admin)):
     exists = db.query(User).filter(User.UserID == username).first() is not None

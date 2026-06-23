@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import jwt
 
 from app.database import get_db
@@ -18,6 +18,16 @@ from app.core.security import SECRET_KEY, ALGORITHM
 router = APIRouter(tags=["Courses"])
 
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+
+def _compute_course_status(course) -> str:
+    if course.completed_at:
+        return "completed"
+    if course.scheduled_at:
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if course.scheduled_at <= now:
+            return "ongoing"
+    return "upcoming"
 
 
 def _get_optional_user(token: str = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)):
@@ -49,6 +59,9 @@ def get_courses(
 ):
     total = db.query(Course).count()
     courses = db.query(Course).offset(skip).limit(limit).all()
+    for c in courses:
+        c.status = _compute_course_status(c)
+        c.lesson_count = db.query(Lesson).filter(Lesson.course_id == c.id).count()
     return {"courses": courses, "total": total, "skip": skip, "limit": limit}
 
 
@@ -57,6 +70,8 @@ def get_course(course_id: str, db: Session = Depends(get_db), current_admin=Depe
     db_course = db.query(Course).filter(Course.course_id == course_id).first()
     if not db_course:
         raise HTTPException(status_code=404, detail="Course not found")
+    db_course.status = _compute_course_status(db_course)
+    db_course.lesson_count = db.query(Lesson).filter(Lesson.course_id == db_course.id).count()
     return db_course
 
 
@@ -72,6 +87,7 @@ def update_course(course_id: str, course_update: CourseUpdate, db: Session = Dep
 
     db.commit()
     db.refresh(db_course)
+    db_course.status = _compute_course_status(db_course)
     return db_course
 
 

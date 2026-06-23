@@ -14,15 +14,15 @@ interface MonthlyRevenueChartProps {
 
 const chartConfig = {
   academy: {
-    label: "Academy",
+    label: "Course",
     color: "var(--chart-1)",
   },
   indicators: {
-    label: "Indicators",
+    label: "Indicator",
     color: "var(--chart-2)",
   },
   bot_alerts: {
-    label: "Bot Alerts",
+    label: "Bot",
     color: "var(--chart-3)",
   },
 } satisfies ChartConfig;

@@ -503,14 +503,14 @@ export function BotMembersView({ bot }: Props) {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="0"
-                      className="pl-9"
+                      className="w-full pl-9"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Payment Method</Label>
                   <Select value={method} onValueChange={setMethod}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -557,7 +557,7 @@ export function BotMembersView({ bot }: Props) {
                 onChange={(e) => setExpiryValue(e.target.value)}
               />
               <p className="text-[11px] text-muted-foreground">
-                Current: {expiryEditMember?.botExpiry || "No expiry set"}
+                Current: {expiryEditMember?.botExpiry ? formatDate(expiryEditMember.botExpiry) : "No expiry set"}
               </p>
             </div>
           </div>

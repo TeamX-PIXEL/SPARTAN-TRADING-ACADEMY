@@ -132,12 +132,12 @@ export function OngoingCoursesTable({ courses }: Props) {
                   <TableCell className="hidden text-sm md:table-cell">{formatDateTime(course.scheduled_at)}</TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="tabular-nums">
-                      {lessonCount(course.id)}
+                      {course.lesson_count ?? 0}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className="tabular-nums">
-                      {memberCount(course.id)}
+                      {course.purchased_count ?? 0}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -288,7 +288,7 @@ export function OngoingCoursesTable({ courses }: Props) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <CourseFormDialog open={editOpen} onOpenChange={setEditOpen} course={editing} />
+      <CourseFormDialog open={editOpen} onOpenChange={setEditOpen} course={editing} mode="ongoing" />
     </>
   );
 }

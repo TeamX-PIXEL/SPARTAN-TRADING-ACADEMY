@@ -22,8 +22,9 @@ export const CartLibraryPanel: React.FC<CartLibraryPanelProps> = ({ isOpen, onCl
   };
 
   const handleCheckoutInitiation = () => {
-    if (!user?.tvid || user.tvid.trim() === "") {
-      addToast("TradingView ID represents a mandatory parameter. Please register yours in account settings first.", 'error');
+    const hasNonCourse = cart.some(item => item.type !== "course");
+    if (hasNonCourse && (!user?.tvid || user.tvid.trim() === "")) {
+      addToast("TradingView ID is required for indicators and bots. Please register yours in account settings first.", 'error');
       return;
     }
     setIsRazorpayOpen(true);

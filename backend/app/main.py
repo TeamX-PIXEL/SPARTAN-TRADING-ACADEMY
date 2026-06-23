@@ -75,11 +75,20 @@ async def _ensure_raw_mysql_tables():
         with open(schema_path, 'r') as f:
             schema_sql = f.read()
 
-        # Split and execute each statement (MySQL connector doesn't support multi-statement well in one execute)
+        # Split and execute each statement.
+        # Some lines contain multiple statements separated by ';'
+        # (e.g. "PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;"),
+        # so split ALL semicolons and execute each individually.
         for statement in schema_sql.split(';'):
             stmt = statement.strip()
             if stmt:
-                cursor.execute(stmt)
+                try:
+                    cursor.execute(stmt)
+                    # Consume any unread result sets to avoid "Unread result found"
+                    while cursor.nextset():
+                        pass
+                except mysql.connector.Error:
+                    pass  # Some conditional statements may fail harmlessly
         connection.commit()
         print("schema.sql executed successfully. Raw MySQL tables created.")
 

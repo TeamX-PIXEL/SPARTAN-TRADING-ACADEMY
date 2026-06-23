@@ -28,7 +28,7 @@ export interface FinanceKpis {
 }
 
 export const SECTION_LABELS: Record<PaymentSection, string> = {
-  academy: "Academy",
-  indicators: "Indicators",
-  bot_alerts: "Bot Alerts",
+  academy: "Course",
+  indicators: "Indicator",
+  bot_alerts: "Bot",
 };

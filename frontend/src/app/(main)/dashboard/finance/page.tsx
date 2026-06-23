@@ -138,7 +138,7 @@ export default async function Page() {
       <div className="flex flex-col gap-1">
         <h1 className="font-bold text-2xl tracking-tight">Finance</h1>
         <p className="text-muted-foreground text-sm">
-          Revenue, transactions, and section performance — derived from Academy, Indicators, and Bot Alerts.
+          Revenue, transactions, and section performance — derived from Courses, Indicators, and Bots.
         </p>
       </div>
 

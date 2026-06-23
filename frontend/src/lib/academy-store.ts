@@ -26,6 +26,7 @@ export interface Course {
   scheduled_at: string;
   purchased_count: number;
   status: CourseStatus;
+  lesson_count?: number;
   completed_at?: string;
   discord_channel_id?: string;
   discord_renewal_price?: number;
@@ -131,6 +132,7 @@ function mapCourse(raw: any): Course {
     scheduled_at: raw.scheduled_at ?? "",
     purchased_count: raw.purchased_count ?? 0,
     status: raw.status ?? "upcoming",
+    lesson_count: raw.lesson_count ?? 0,
     completed_at: raw.completed_at ?? undefined,
     discord_channel_id: raw.discord_channel_id ?? undefined,
     discord_renewal_price: raw.discord_renewal_price ?? undefined,

@@ -63,11 +63,11 @@ const columns: ColumnDef<RecentPurchaserRow>[] = [
 export function RecentPurchasersTable({ data }: RecentPurchasersTableProps) {
   return (
     <DataTable
-      title="Recent Indicator Purchasers"
+      title="Recent Purchasers"
       description={
         data.length === 0
-          ? "No purchases recorded yet — wire a purchaser endpoint on FastAPI to populate this list."
-          : `Latest ${data.length} purchaser${data.length === 1 ? "" : "s"} across all indicators.`
+          ? "No purchases recorded yet."
+          : `Latest ${data.length} purchaser${data.length === 1 ? "" : "s"} across all products.`
       }
       columns={columns}
       data={data}

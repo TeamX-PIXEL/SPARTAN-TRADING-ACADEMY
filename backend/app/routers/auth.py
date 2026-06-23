@@ -41,10 +41,12 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         password=hashed_password,
         tvid=user.tvid,
+        phone_number=user.phone_number,
         is_verified=False,
         verification_token=verification_token,
         token_expires_at=token_expires
     )
+    new_user.client_name = f"{user.firstname} {user.lastname}"
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -88,7 +90,7 @@ def login_user(user: UserLogin, db: Session = Depends(get_db)):
         print(f"Warning: failed to record last_login for user {db_user.id}: {exc}")
 
     access_token = create_access_token(data={"sub": str(db_user.id)})
-    return {"message": "Login successful", "access_token": access_token, "UserUUID": db_user.UserUUID}
+    return {"message": "Login successful", "access_token": access_token, "user_id": db_user.id, "username": db_user.UserID}
 
 
 @router.get("/users/me", response_model=UserResponse)

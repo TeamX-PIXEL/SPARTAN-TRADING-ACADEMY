@@ -172,7 +172,12 @@ export function EnrolledMembersView({ course }: Props) {
 
   function handleOpenDiscordEdit(member: Member) {
     setDiscordEditMember(member);
-    setDiscordExpiry(member.discordExpiry || "");
+    if (member.discordExpiry) {
+      const d = new Date(member.discordExpiry);
+      setDiscordExpiry(d.toISOString().split("T")[0]);
+    } else {
+      setDiscordExpiry("");
+    }
     setDiscordEditOpen(true);
   }
 
@@ -220,7 +225,7 @@ export function EnrolledMembersView({ course }: Props) {
         <StatCard label="Total Members" value={courseMembers.length} icon={<Users className="size-4" />} />
         <StatCard label="Paid Access" value={paid} accent="emerald" />
         <StatCard label="Free Access" value={free} accent="amber" icon={<Gift className="size-4" />} />
-        <StatCard label="With Discord" value={courseMembers.filter((m) => m.discordid).length} accent="violet" icon={<MessageSquare className="size-4" />} />
+        <StatCard label="With Discord" value={courseMembers.filter((m) => m.discordExpiry).length} accent="violet" icon={<MessageSquare className="size-4" />} />
       </div>
 
       <Card className="w-full">
@@ -514,14 +519,14 @@ export function EnrolledMembersView({ course }: Props) {
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       placeholder="0"
-                      className="pl-9"
+                      className="w-full pl-9"
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Payment Method</Label>
                   <Select value={method} onValueChange={setMethod}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -568,7 +573,7 @@ export function EnrolledMembersView({ course }: Props) {
                 onChange={(e) => setDiscordExpiry(e.target.value)}
               />
               <p className="text-[11px] text-muted-foreground">
-                Current: {discordEditMember?.discordExpiry || "No expiry set"}
+                Current: {discordEditMember?.discordExpiry ? formatDate(discordEditMember.discordExpiry) : "No expiry set"}
               </p>
             </div>
           </div>

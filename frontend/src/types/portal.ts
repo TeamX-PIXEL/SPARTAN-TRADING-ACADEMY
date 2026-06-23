@@ -18,6 +18,7 @@ export interface Course extends BaseProduct {
   scheduled_at?: string;
   estimated_duration?: number;
   discord_renewal_price?: number;
+  status?: "upcoming" | "ongoing" | "completed";
 }
 
 export interface Indicator extends BaseProduct {

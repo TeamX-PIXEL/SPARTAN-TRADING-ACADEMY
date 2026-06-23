@@ -8,6 +8,7 @@ class User(Base):
 
     id = Column("user_id", Integer, primary_key=True, index=True)
     UserID = Column("username", String(255), unique=True, index=True)
+    client_name = Column(String(255), nullable=True, default="")
     firstname = Column(String(255), nullable=True)
     lastname = Column(String(255), nullable=True)
     email = Column(String(255), unique=True, index=True)

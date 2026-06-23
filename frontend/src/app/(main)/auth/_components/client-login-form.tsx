@@ -1,31 +1,33 @@
 "use client";
 
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const formSchema = z.object({
-  username: z.string().min(1, { message: "Username is required." }),
+  email: z.string().email({ message: "Please enter a valid email address." }),
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   remember: z.boolean().optional(),
 });
 
-export function LoginForm() {
+export function ClientLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      username: "",
+      email: "",
       password: "",
       remember: false,
     },
@@ -35,19 +37,25 @@ export function LoginForm() {
 
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     try {
-      const res = await signIn("credentials", {
-        username: data.username,
-        password: data.password,
-        redirect: false,
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
       });
 
-      if (res?.error) {
-        toast.error("Invalid username or password");
+      const result = await res.json();
+
+      if (!res.ok) {
+        toast.error(result.detail || "Invalid credentials");
         return;
       }
 
+      localStorage.setItem("access_token", result.access_token);
       toast.success("Login successful");
-      router.push("/dashboard");
+      router.push("/portal/courses");
     } catch (err) {
       console.error(err);
       toast.error("Something went wrong");
@@ -59,16 +67,16 @@ export function LoginForm() {
       <FieldGroup className="gap-4">
         <Controller
           control={form.control}
-          name="username"
+          name="email"
           render={({ field, fieldState }) => (
             <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="login-username">Username</FieldLabel>
+              <FieldLabel htmlFor="login-email">Email</FieldLabel>
               <Input
                 {...field}
-                id="login-username"
-                type="text"
-                placeholder="admin"
-                autoComplete="username"
+                id="login-email"
+                type="email"
+                placeholder="you@example.com"
+                autoComplete="email"
                 aria-invalid={fieldState.invalid}
               />
               {fieldState.invalid && <FieldError errors={[fieldState.error]} />}

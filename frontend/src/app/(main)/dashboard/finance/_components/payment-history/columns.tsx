@@ -95,7 +95,7 @@ export function PaymentHistoryTable({ data }: PaymentHistoryTableProps) {
       description={
         data.length === 0
           ? "No payments to display yet — buyer activity from courses, indicators, and bot alerts will appear here."
-          : `Showing ${data.length} most recent payment${data.length === 1 ? "" : "s"} across Academy, Indicators, and Bot Alerts.`
+          : `Showing ${data.length} most recent payment${data.length === 1 ? "" : "s"} across Courses, Indicators, and Bots.`
       }
       columns={columns}
       data={data}

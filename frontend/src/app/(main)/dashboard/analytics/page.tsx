@@ -75,8 +75,9 @@ async function fetchIndicators(
 ): Promise<{ data: IndicatorRow[]; status: ModuleStatus }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  const result = await safeFetch<IndicatorRow[]>(`${API_URL}/fetch/indicators`, { headers });
-  return { data: result.data, status: result.ok ? "ok" : "down" };
+  const result = await safeFetch<{ indicators: IndicatorRow[] }>(`${API_URL}/api/admin/indicators`, { headers });
+  const data = Array.isArray(result.data) ? result.data : (result.data?.indicators ?? []);
+  return { data, status: result.ok ? "ok" : "down" };
 }
 
 async function fetchBotUsers(accessToken: string | undefined): Promise<{
@@ -132,12 +133,22 @@ async function fetchEnrollingCourses(accessToken: string | undefined): Promise<E
 async function fetchUpcomingSessions(accessToken: string | undefined): Promise<UpcomingSessionRow[]> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-  const result = await safeFetch<{ sessions: UpcomingSessionRow[] }>(
+  const result = await safeFetch<{ sessions: { course_id: string; course_title: string; lesson_title: string; lesson_type: string; link: string; scheduled_at: string }[] }>(
     `${API_URL}/api/admin/dashboard/upcoming-sessions`,
     { headers },
     { sessions: [] },
   );
-  return Array.isArray(result.data?.sessions) ? result.data.sessions : [];
+  if (!result.ok) return [];
+  return (result.data.sessions || []).map((s, i) => ({
+    schedule_id: i,
+    course_id: 0,
+    course_title: s.course_title,
+    chapter_title: s.lesson_title,
+    session_type: s.lesson_type,
+    scheduled_at: s.scheduled_at,
+    batch_label: null,
+    join_link: s.link,
+  }));
 }
 
 function buildExpiringRows(users: BotUser[]): ExpiringSubscriptionRow[] {
@@ -179,12 +190,76 @@ function buildExpiringRows(users: BotUser[]): ExpiringSubscriptionRow[] {
     .sort((a, b) => a.daysRemaining - b.daysRemaining);
 }
 
-function buildRecentPurchasers(): RecentPurchaserRow[] {
-  // Purchaser data is currently kept in client-side state in the indicators page
-  // and is not exposed via a FastAPI endpoint yet. We return an empty array so the
-  // table renders its "no data" state. Once a purchaser endpoint exists, replace
-  // this with a server fetch.
-  return [];
+async function fetchMonthlyRevenue(accessToken: string | undefined): Promise<RevenuePoint[]> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const result = await safeFetch<{ monthKey: string; monthLabel: string; academy: number; indicators: number; bot_alerts: number; total: number }[]>(
+    `${API_URL}/api/admin/transactions/monthly-revenue`,
+    { headers },
+    [],
+  );
+  if (!result.ok || !result.data.length) return [];
+  return result.data
+    .filter((m) => m.total > 0)
+    .map((m) => ({
+      date: `${m.monthKey}-01`,
+      academy: m.academy,
+      indicators: m.indicators,
+      bots: m.bot_alerts,
+    }));
+}
+
+async function fetchRecentPurchasers(accessToken: string | undefined): Promise<RecentPurchaserRow[]> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const result = await safeFetch<{ customer: string; item: string | null; date: string; amount: number; product_section: string; username: string; expiry: string | null }[]>(
+    `${API_URL}/api/admin/transactions`,
+    { headers },
+    [],
+  );
+  if (!result.ok) return [];
+  return result.data.slice(0, 10).map((t) => ({
+    id: t.username + (t.item ?? ""),
+    username: t.customer || t.username,
+    productName: t.item || "—",
+    purchasedAt: t.date || "",
+    accessStatus: t.amount > 0 ? "Approved" : "Approved",
+    subscription: t.product_section,
+    expiresAt: t.expiry || null,
+  }));
+}
+
+async function fetchExpiringBots(accessToken: string | undefined): Promise<ExpiringSubscriptionRow[]> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const result = await safeFetch<{ username: string; bot_id: string; expiry: string | null }[]>(
+    `${API_URL}/api/admin/dashboard/expiring-bot-members?days=30`,
+    { headers },
+    [],
+  );
+  if (!result.ok || !result.data.length) return [];
+  const today = new Date();
+  return result.data
+    .map((m) => {
+      if (!m.expiry) return null;
+      const parsed = parseISO(m.expiry);
+      if (!isValid(parsed)) return null;
+      const days = differenceInCalendarDays(parsed, today);
+      const status: ExpiringSubscriptionRow["status"] =
+        days < 0 ? "Expired" : days <= 3 ? "Critical" : days <= 7 ? "Warning" : "Healthy";
+      return expiringSubscriptionSchema.parse({
+        id: `${m.username}-${m.bot_id}`,
+        user: m.username,
+        telegramId: "—",
+        model: m.bot_id,
+        expiry: parsed.toISOString(),
+        daysRemaining: days,
+        status,
+      });
+    })
+    .filter((row): row is ExpiringSubscriptionRow => row !== null)
+    .filter((row) => row.status !== "Healthy")
+    .sort((a, b) => a.daysRemaining - b.daysRemaining);
 }
 
 function computeTotals(indicators: IndicatorRow[], courses: CourseRow[], users: BotUser[]) {
@@ -210,14 +285,9 @@ function buildRevenueSeries(indicators: IndicatorRow[], courses: CourseRow[], us
   const hasAny = academyTotal + indicatorTotal + botTotal > 0;
   if (!hasAny) return [];
 
-  // Spread the computed totals across 90 days with random daily variation so
-  // the area chart renders as a proper timeseries rather than a single dot.
   const days = 90;
   const points: RevenuePoint[] = [];
   const today = new Date();
-
-  // Use a simple seeded-like shuffle so the curve looks realistic without
-  // pulling in extra libraries.
   const seed = 42;
   const pseudoRandom = (n: number) => {
     const x = Math.sin(seed * n * 9999) * 10000;
@@ -231,7 +301,7 @@ function buildRevenueSeries(indicators: IndicatorRow[], courses: CourseRow[], us
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
-    const noise = () => 0.6 + pseudoRandom(i) * 0.8; // 0.6 – 1.4x multiplier
+    const noise = () => 0.6 + pseudoRandom(i) * 0.8;
     points.push({
       date: date.toISOString().slice(0, 10),
       academy: Math.round(avgAcademy * noise()),
@@ -257,7 +327,7 @@ export default async function Page() {
   const session = await getServerSession(authOptions);
   const token = session?.accessToken;
 
-  const [ping, coursesRes, indicatorsRes, botRes, overview, enrollingCourses, upcomingSessions] = await Promise.all([
+  const [ping, coursesRes, indicatorsRes, botRes, overview, enrollingCourses, upcomingSessions, monthlyRevenue] = await Promise.all([
     pingApi(),
     fetchCourses(token),
     fetchIndicators(token),
@@ -265,15 +335,16 @@ export default async function Page() {
     fetchOverview(token),
     fetchEnrollingCourses(token),
     fetchUpcomingSessions(token),
+    fetchMonthlyRevenue(token),
   ]);
 
   const courses = coursesRes.data;
   const indicators = indicatorsRes.data;
   const botUsers = botRes.data;
 
-  const expiringRows = buildExpiringRows(botUsers);
-  const revenueSeries = buildRevenueSeries(indicators, courses, botUsers);
-  const recentPurchasers = buildRecentPurchasers();
+  const expiringRows = await fetchExpiringBots(token);
+  const recentPurchasers = await fetchRecentPurchasers(token);
+  const revenueSeries = monthlyRevenue.length > 0 ? monthlyRevenue : buildRevenueSeries(indicators, courses, botUsers);
 
   const health: SystemHealth = {
     apiStatus: ping.status,

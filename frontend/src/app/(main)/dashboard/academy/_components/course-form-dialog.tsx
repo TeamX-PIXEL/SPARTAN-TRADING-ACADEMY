@@ -29,6 +29,7 @@ interface CourseFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   course?: Course | null;
+  mode?: "upcoming" | "ongoing" | "completed";
 }
 
 interface FormState {
@@ -75,9 +76,11 @@ function isoToLocalInput(iso?: string): string {
 
 const DIFFICULTIES: Difficulty[] = ["Beginner", "Intermediate", "Advanced", "Master"];
 
-export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialogProps) {
+export function CourseFormDialog({ open, onOpenChange, course, mode = "upcoming" }: CourseFormDialogProps) {
   const addCourse = useAcademyStore((s) => s.addCourse);
   const updateCourse = useAcademyStore((s) => s.updateCourse);
+
+  const discordOnly = mode === "ongoing" || mode === "completed";
 
   const [form, setForm] = React.useState<FormState>(EMPTY);
   const [imagePreview, setImagePreview] = React.useState<string | null>(null);
@@ -134,12 +137,13 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
     setIdTaken(clash);
   }, [form.course_id, courses, course?.id]);
 
-  const valid =
-    form.course_id.trim() &&
-    form.title.trim() &&
-    form.price.trim() &&
-    form.scheduled_at &&
-    !idTaken;
+  const valid = discordOnly
+    ? true
+    : form.course_id.trim() &&
+      form.title.trim() &&
+      form.price.trim() &&
+      form.scheduled_at &&
+      !idTaken;
 
   function handleImageFile(file: File | null) {
     if (!file) return;
@@ -186,16 +190,52 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Course" : "Create New Course"}</DialogTitle>
+          <DialogTitle>{discordOnly ? "Edit Discord Settings" : isEdit ? "Edit Course" : "Create New Course"}</DialogTitle>
           <DialogDescription>
-            {isEdit
-              ? "Update the course details. These fields power the client portal product card & detail modal."
-              : "Fill in the course details. Fields mirror what the client portal renders (per PORTAL_DATA_REQUIREMENTS.md)."}
+            {discordOnly
+              ? "Update Discord channel and renewal price for this course."
+              : isEdit
+                ? "Update the course details. These fields power the client portal product card & detail modal."
+                : "Fill in the course details. Fields mirror what the client portal renders (per PORTAL_DATA_REQUIREMENTS.md)."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5 py-2">
-          <div className="grid gap-4 sm:grid-cols-2">
+          {discordOnly ? (
+            <>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Editing Discord settings for <span className="text-foreground font-semibold">{course?.title}</span>
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="cf-discord-id">Discord Channel / Group ID</Label>
+                  <Input
+                    id="cf-discord-id"
+                    value={form.discord_channel_id}
+                    onChange={(e) => set("discord_channel_id", e.target.value)}
+                    placeholder="e.g. 1234567890123456789"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Private Discord server or group ID for this course.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cf-discord-renewal">Discord Renewal Price (INR)</Label>
+                  <Input
+                    id="cf-discord-renewal"
+                    type="number"
+                    min={0}
+                    value={form.discord_renewal_price}
+                    onChange={(e) => set("discord_renewal_price", e.target.value)}
+                    placeholder="e.g. 4092"
+                  />
+                  <p className="text-[11px] text-muted-foreground">1-year Discord support renewal price shown to clients.</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+            <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="cf-id">Custom Course ID</Label>
               <Input
@@ -413,6 +453,8 @@ export function CourseFormDialog({ open, onOpenChange, course }: CourseFormDialo
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         <DialogFooter>

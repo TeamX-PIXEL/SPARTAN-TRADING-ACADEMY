@@ -67,6 +67,7 @@ def update_my_profile(
         current_user.firstname = update.firstname
     if update.lastname is not None:
         current_user.lastname = update.lastname
+    current_user.client_name = f"{current_user.firstname or ''} {current_user.lastname or ''}".strip()
     if update.tvid is not None:
         current_user.tvid = update.tvid
     if update.phone_number is not None:

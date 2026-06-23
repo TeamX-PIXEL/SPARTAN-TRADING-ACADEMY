@@ -14,8 +14,7 @@ import {
   Video, 
   ExternalLink, 
   RefreshCw, 
-  Plus, 
-  Terminal, 
+  Plus,
   CreditCard, 
   CheckCircle2, 
   Activity, 
@@ -147,12 +146,6 @@ export const LibraryPage: React.FC = () => {
   const [discordSupportDaysLeft, setDiscordSupportDaysLeft] = useState<Record<string, number>>({});
 
   // Admin simulation state
-  const [selectedCourseForAdmin, setSelectedCourseForAdmin] = useState<string>('');
-  const [adminLessonTitle, setAdminLessonTitle] = useState('');
-  const [adminLessonType, setAdminLessonType] = useState<'youtube' | 'zoom' | 'meet'>('youtube');
-  const [adminLessonLink, setAdminLessonLink] = useState('');
-  const [adminMeetingStartTime, setAdminMeetingStartTime] = useState('');
-  const [isAdminConsoleVisible, setIsAdminConsoleVisible] = useState(false);
 
   // History states
   const [historySearch, setHistorySearch] = useState('');
@@ -246,60 +239,6 @@ export const LibraryPage: React.FC = () => {
   };
 
   // Handle Admin Simulation
-  const handleAdminAddLesson = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCourseForAdmin) {
-      addToast("Please select a target course as Administrator.", "error");
-      return;
-    }
-    if (!adminLessonTitle.trim()) {
-      addToast("A lesson title is mandatory.", "error");
-      return;
-    }
-    
-    // Provide general defaults for meeting/video links if empty
-    let finalLink = adminLessonLink.trim();
-    if (!finalLink) {
-      if (adminLessonType === 'youtube') finalLink = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-      else if (adminLessonType === 'zoom') finalLink = "https://zoom.us/j/9876543210";
-      else finalLink = "https://meet.google.com/abc-defg-hij";
-    }
-
-    try {
-      addToast("Pushing new course lesson structure from Administrator Desk...", "info");
-      const newLesson = await API.adminAddLesson(
-        selectedCourseForAdmin,
-        adminLessonTitle,
-        adminLessonType,
-        finalLink,
-        (adminLessonType === 'zoom' || adminLessonType === 'meet') ? adminMeetingStartTime : undefined
-      );
-      
-      const targetCourse = library.courses.find(c => c.id === selectedCourseForAdmin);
-      const courseTitle = targetCourse ? targetCourse.title : 'Course Masterclass';
-
-      addNotification(
-        `New Lesson Alert: ${adminLessonTitle}`,
-        `Admin uploaded a new "${adminLessonType}" lesson for "${courseTitle}". Click to stream now.`,
-        'lesson',
-        '/library',
-        selectedCourseForAdmin
-      );
-      
-      addToast(`Successfully published: "${newLesson.title}" to student terminals!`, "success");
-      
-      // Reset Admin form
-      setAdminLessonTitle('');
-      setAdminLessonLink('');
-      setAdminMeetingStartTime('');
-      
-      // Reload lessons state
-      fetchLibraryDetails();
-    } catch (err) {
-      addToast("Failed inside simulated deployment.", "error");
-    }
-  };
-
   // Render Tabs list
   const tabItems = [
     { id: 'all', label: 'All Items', count: library.courses.length + library.indicators.length + library.bots.length, icon: LayoutGrid },
@@ -333,113 +272,7 @@ export const LibraryPage: React.FC = () => {
             Access your licensed indicators, live trading masterclass video rooms, execution bots, and billing records.
           </p>
         </div>
-
-        {/* Quick admin panel toggle to simulate lessons adding */}
-        <button
-          type="button"
-          onClick={() => setIsAdminConsoleVisible(!isAdminConsoleVisible)}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold font-mono tracking-wide transition-all border flex items-center gap-2 cursor-pointer ${
-            isAdminConsoleVisible 
-              ? 'bg-amber-950/40 border-amber-500/30 text-amber-300' 
-              : 'bg-[#12151c]/60 border-[#1e222b] text-neutral-400 hover:text-white hover:bg-[#12151c]'
-          }`}
-        >
-          <Terminal className="w-3.5 h-3.5" />
-          <span>{isAdminConsoleVisible ? 'Hide Admin Console' : 'Open Simulated Admin Console'}</span>
-        </button>
       </div>
-
-      {/* Admin Panel Simulator Widget */}
-      {isAdminConsoleVisible && (
-        <div id="simulated-admin-console" className="bg-[#12110c] border border-amber-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-amber-500">
-              <Terminal className="w-4.5 h-4.5" />
-              <h3 className="text-xs font-mono font-bold uppercase tracking-wider">
-                Simulated Administrative Terminal (School Master)
-              </h3>
-            </div>
-            <span className="px-2 py-0.5 bg-amber-500/10 text-[9px] font-mono text-amber-500 rounded border border-amber-500/20">
-              LOCAL SANDBOX ONLY
-            </span>
-          </div>
-          
-          <p className="text-[11.5px] text-[#e0a96d] leading-relaxed">
-            As an instructor/administrator of DealDeck Academy, simulate adding a new recorded class or live meeting link to are active courses. This mock adds it to local storage lessons instantly to verify real-time layout updates!
-          </p>
-
-          <form onSubmit={handleAdminAddLesson} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-[#07080a]/50 p-4 rounded-xl border border-amber-500/10">
-            {/* Target Course */}
-            <div className="space-y-1.5 md:col-span-3">
-              <label className="text-[10px] font-mono uppercase text-neutral-400 block font-semibold">Target Course</label>
-              <select
-                value={selectedCourseForAdmin}
-                onChange={e => setSelectedCourseForAdmin(e.target.value)}
-                className="w-full bg-[#12151c] border border-[#1e222b] text-xs text-white rounded-lg p-2.5 focus:border-amber-500 focus:outline-none"
-              >
-                <option value="">-- Choose Course --</option>
-                {library.courses.map((c, index) => (
-                  <option key={`${c.id}-${index}`} value={c.id}>{c.title}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Lesson Title */}
-            <div className="space-y-1.5 md:col-span-3">
-              <label className="text-[10px] font-mono uppercase text-neutral-400 block font-semibold">Lesson Title</label>
-              <input
-                type="text"
-                placeholder="Volume Delta Sweep analysis"
-                value={adminLessonTitle}
-                onChange={e => setAdminLessonTitle(e.target.value)}
-                className="w-full bg-[#12151c] border border-[#1e222b] text-xs text-white rounded-lg p-2.5 placeholder-neutral-600 focus:border-amber-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Type */}
-            <div className="space-y-1.5 md:col-span-2">
-              <label className="text-[10px] font-mono uppercase text-neutral-400 block font-semibold">Broadcaster Medium</label>
-              <select
-                value={adminLessonType}
-                onChange={e => setAdminLessonType(e.target.value as any)}
-                className="w-full bg-[#12151c] border border-[#1e222b] text-xs text-white rounded-lg p-2.5 focus:border-amber-500 focus:outline-none"
-              >
-                <option value="youtube">Recorded YouTube Video</option>
-                <option value="zoom">Live Zoom Meeting Invite</option>
-                <option value="meet">Google Meet Video Chat Link</option>
-              </select>
-            </div>
-
-            {/* Meeting Start Time (only for non-youtube zoom/meet broadcaster mediums) */}
-            {(adminLessonType === 'zoom' || adminLessonType === 'meet') ? (
-              <div className="space-y-1.5 md:col-span-2 animate-fadeIn">
-                <label className="text-[10px] font-mono uppercase text-orange-400 font-bold block">Meeting Start Time</label>
-                <input
-                  type="datetime-local"
-                  value={adminMeetingStartTime}
-                  onChange={e => setAdminMeetingStartTime(e.target.value)}
-                  className="w-full bg-[#161a24] border border-orange-500/30 text-xs text-white rounded-lg p-2.5 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
-                  required
-                />
-              </div>
-            ) : (
-              // Empty spacer to occupy the equivalent columns nicely
-              <div className="hidden md:block md:col-span-2"></div>
-            )}
-
-            {/* Submit */}
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                className="w-full bg-amber-600 hover:bg-amber-500 text-white font-mono font-bold text-xs uppercase py-2.5 rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Deploy Lesson Link</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
 
       {/* Navigation Sub-Tabs */}
       <div className="flex border-b border-[#1e222b] overflow-x-auto scrollbar-none">
@@ -488,13 +321,16 @@ export const LibraryPage: React.FC = () => {
           )}
           
           {/* TAB 1: COURSES SECTION */}
-          {(activeTab === 'courses' || (activeTab === 'all' && library.courses.length > 0)) && (
+          {(activeTab === 'courses' || (activeTab === 'all' && library.courses.length > 0)) && (() => {
+            const activeCourses = library.courses.filter(c => c.status !== 'completed');
+            const completedCourses = library.courses.filter(c => c.status === 'completed');
+            return (
           <div className="space-y-6 pb-12">
-            {activeTab === 'all' && (
+            {activeTab === 'all' && (activeCourses.length > 0 || completedCourses.length > 0) && (
               <div className="flex items-center gap-2 pb-2 border-b border-[#1e222b]/40">
                 <BookOpen className="w-4 h-4 text-blue-400" />
                 <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-[#4e5a70]">
-                  Active Masterclasses ({library.courses.length})
+                  Masterclasses ({library.courses.length})
                 </h3>
               </div>
             )}
@@ -509,11 +345,23 @@ export const LibraryPage: React.FC = () => {
                 </div>
               )
             ) : (
+              <>
+              {/* ACTIVE / UPCOMING COURSES */}
+              {activeCourses.length > 0 && (
+              <div className="space-y-4">
+                {activeTab === 'all' && (
+                  <div className="flex items-center gap-2 pt-2 pb-1">
+                    <span className="flex h-1.5 w-1.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+                    </span>
+                    <h4 className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400">Active Masterclasses ({activeCourses.length})</h4>
+                  </div>
+                )}
               <div className="grid grid-cols-1 gap-8">
-                {library.courses.map((course, index) => {
+                {activeCourses.map((course, index) => {
                   const scheduledDate = course.scheduled_at;
                   const isStarted = scheduledDate ? new Date(scheduledDate) <= new Date() : true;
-                  // Filter lessons belonging to this course
                   const courseLessons = lessons.filter(l => l.course_id === course.id);
                   const isExpanded = !!expandedCourses[course.id];
                   const toggleExpand = () => {
@@ -619,6 +467,7 @@ export const LibraryPage: React.FC = () => {
                           </div>
 
                           {/* Premium Discord Lounge Integration */}
+                          {isStarted && (
                           <div className="pt-4 border-t border-[#1e222b]/50">
                             <div className="bg-indigo-950/15 border border-indigo-500/15 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                               <div className="space-y-1">
@@ -660,6 +509,7 @@ export const LibraryPage: React.FC = () => {
                               </div>
                             </div>
                           </div>
+                          )}
                         </div>
                       </div>
 
@@ -858,9 +708,154 @@ export const LibraryPage: React.FC = () => {
                   );
                 })}
               </div>
+              </div>
+              )}
+
+              {/* COMPLETED COURSES */}
+              {completedCourses.length > 0 && (
+              <div className="space-y-4">
+                {activeTab === 'all' && (
+                  <div className="flex items-center gap-2 pt-2 pb-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-neutral-500" />
+                    <h4 className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-500">Completed Masterclasses ({completedCourses.length})</h4>
+                  </div>
+                )}
+              <div className="grid grid-cols-1 gap-8">
+                {completedCourses.map((course, index) => {
+                  const scheduledDate = course.scheduled_at;
+                  const courseLessons = lessons.filter(l => l.course_id === course.id);
+
+                  return (
+                    <div 
+                      key={`${course.id}-${index}`} 
+                      className="bg-[#0c0d10] border border-[#1e222b] rounded-2xl overflow-hidden shadow-lg opacity-80"
+                    >
+                      <div className="grid grid-cols-1 lg:grid-cols-12">
+                        {/* Course Left Thumbnail Image Column */}
+                        <div className="lg:col-span-4 relative min-h-[160px] max-h-[220px] lg:max-h-none overflow-hidden">
+                          <img 
+                            src={course.image} 
+                            alt={course.title} 
+                            className="absolute inset-0 w-full h-full object-cover grayscale-[30%]"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div className="absolute top-3 left-3 bg-[#07080a]/90 backdrop-blur border border-[#1e222b] px-2.5 py-1 rounded-md text-[9px] font-mono font-bold tracking-widest text-[#4e5a70] uppercase">
+                            {course.category}
+                          </div>
+                          <div className="absolute top-3 right-3 bg-emerald-900/80 backdrop-blur border border-emerald-500/30 px-2.5 py-1 rounded-md text-[9px] font-mono font-bold tracking-widest text-emerald-300 uppercase flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Completed
+                          </div>
+                        </div>
+
+                        {/* Course Metadata Content Column */}
+                        <div className="lg:col-span-8 p-5 md:p-6 lg:p-7 flex flex-col justify-between space-y-4">
+                          <div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                              <span className="font-mono text-[10px] uppercase font-semibold text-[#4e5a70]">
+                                Instructor: {course.lecturer}
+                              </span>
+                              <span className={`self-start sm:self-auto text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-widest ${
+                                course.difficulty === 'Advanced' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 
+                                course.difficulty === 'Intermediate' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 
+                                'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                              }`}>
+                                {course.difficulty} Difficulty
+                              </span>
+                            </div>
+                            
+                            <h3 className="text-lg font-bold text-white tracking-wide mt-2">
+                              {course.title}
+                            </h3>
+                            <p className="text-xs text-neutral-400 mt-1 leading-relaxed max-w-2xl">
+                              {course.description}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-[#1e222b]/50">
+                            <div>
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Status:</span>
+                              <div className="mt-1.5 flex items-center gap-1.5 text-neutral-500 text-xs font-mono font-bold">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>COURSE COMPLETED</span>
+                              </div>
+                            </div>
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-500">Content:</span>
+                              <p className="text-xs text-neutral-400 font-semibold">
+                                {courseLessons.length} Total Lectures
+                              </p>
+                              <div className="flex flex-col gap-0.5 text-[10px] text-neutral-400 font-mono mt-0.5">
+                                <span>Duration: {course.duration}</span>
+                                {scheduledDate && (
+                                  <span>
+                                    Started On: {new Date(scheduledDate).toLocaleDateString('en-US', {
+                                      weekday: 'long',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Discord Support for Completed Courses */}
+                          <div className="pt-4 border-t border-[#1e222b]/50">
+                            <div className="bg-indigo-950/15 border border-indigo-500/15 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                                  <span className="text-[10px] uppercase font-mono tracking-widest font-bold text-indigo-400">Premium Discord Support Portal</span>
+                                  <span className="text-[8px] px-2 py-0.5 bg-indigo-600 font-mono text-white rounded font-bold uppercase select-none">
+                                    {Math.max(0, discordSupportDaysLeft[course.id] ?? 0)} Days Left
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-neutral-400 leading-relaxed font-sans max-w-xl">
+                                  Course has ended but Discord access continues for 1 full year from purchase date. Extend your support anytime.
+                                </p>
+                                <div className="flex items-center gap-3 text-[9.5px] font-mono text-neutral-500 flex-wrap">
+                                  <span>•</span>
+                                  <span>Discord Access: <span className="text-emerald-400 font-semibold">Active & Expandable</span></span>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto select-none">
+                                <a 
+                                  href="https://discord.gg/dealdeck" 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 border border-indigo-500/30 text-white rounded-lg text-[10.5px] font-mono font-bold uppercase tracking-wide flex items-center justify-center gap-1 transition-all select-none shadow-md shadow-indigo-950/20 cursor-pointer"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <span>Join Discord</span>
+                                </a>
+                                
+                                <button
+                                  type="button"
+                                  onClick={() => setRenewingDiscordCourse(course)}
+                                  className="px-3 py-1.5 bg-[#12151c] hover:bg-neutral-800 border border-[#1e222b] hover:border-neutral-700 text-neutral-300 hover:text-white rounded-lg text-[10.5px] font-mono font-bold uppercase tracking-wide flex items-center justify-center gap-1 transition-all cursor-pointer"
+                                >
+                                  <RefreshCw className="w-3 h-3 text-neutral-400" />
+                                  <span>Extend +1 Yr</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              </div>
+              )}
+              </>
             )}
             </div>
-          )}
+            );
+          })()}
 
           {/* TAB 2: INDICATORS SECTION */}
           {(activeTab === 'indicators' || (activeTab === 'all' && library.indicators.length > 0)) && (

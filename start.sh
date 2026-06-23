@@ -305,12 +305,12 @@ if command -v mysql &> /dev/null; then
     
     print_info "Checking required tables..."
     
-    TABLE_EXISTS=$(mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" --skip-ssl -D "$MYSQL_DATABASE" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MYSQL_DATABASE}' AND table_name='signal_users';" -s -N 2>/dev/null)
-    
+    TABLE_EXISTS=$(mysql -h "$MYSQL_HOST" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" --skip-ssl -D "$MYSQL_DATABASE" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${MYSQL_DATABASE}' AND table_name='evergreen_bot_alert_filter';" -s -N 2>/dev/null)
+
     if [ "$TABLE_EXISTS" -gt 0 ]; then
-        print_success "Table 'signal_users' exists"
+        print_success "Table 'evergreen_bot_alert_filter' exists"
     else
-        print_warning "Table 'signal_users' not found"
+        print_warning "Table 'evergreen_bot_alert_filter' not found"
         
         if [ -f "$BACKEND_DIR/schema.sql" ]; then
             print_info "Running schema.sql to create tables..."
