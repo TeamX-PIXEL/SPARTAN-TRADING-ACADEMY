@@ -13,10 +13,7 @@ class CourseBase(BaseModel):
     category: str = "General"
     features: Optional[list] = None
     duration_months: int = 1
-    lecturer: str = "TBA"
     difficulty: str = "Beginner"
-    scheduled_at: Optional[datetime] = None
-    purchased_count: int = 0
     course_thumbnail: Optional[str] = None
     discord_channel_id: Optional[str] = None
     discord_renewal_price: Optional[float] = None
@@ -28,10 +25,15 @@ class CourseCreate(CourseBase):
 
 class CourseResponse(CourseBase):
     id: int
-    status: str = "upcoming"
-    completed_at: Optional[datetime] = None
     created_at: datetime
     lesson_count: int = 0
+    purchased_count: int = 0
+    status: str = "upcoming"
+    completed_at: Optional[datetime] = None
+    scheduled_at: Optional[datetime] = None
+    lecturer: str = ""
+    discord_channel_id: Optional[str] = None
+    discord_renewal_price: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -65,10 +67,41 @@ class CourseUpdate(BaseModel):
     category: Optional[str] = None
     features: Optional[list] = None
     duration_months: Optional[int] = None
-    lecturer: Optional[str] = None
     difficulty: Optional[str] = None
-    scheduled_at: Optional[datetime] = None
     course_thumbnail: Optional[str] = None
+    discord_channel_id: Optional[str] = None
+    discord_renewal_price: Optional[float] = None
+
+
+class BatchBase(BaseModel):
+    course_id: str
+    instructor: str = ""
+    scheduled_at: Optional[datetime] = None
+    discord_channel_id: Optional[str] = None
+    discord_renewal_price: Optional[float] = None
+
+
+class BatchCreate(BatchBase):
+    batch_id: Optional[str] = None
+
+
+class BatchResponse(BatchBase):
+    id: int
+    batch_id: str
+    purchased_count: int = 0
+    status: str = "upcoming"
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    lesson_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BatchUpdate(BaseModel):
+    instructor: Optional[str] = None
+    scheduled_at: Optional[datetime] = None
+    discord_channel_id: Optional[str] = None
+    discord_renewal_price: Optional[float] = None
     status: Optional[str] = None
     completed_at: Optional[datetime] = None
 
@@ -95,7 +128,7 @@ class LessonUpdate(BaseModel):
 
 class LessonResponse(LessonBase):
     id: int
-    course_id: int
+    batch_id: Optional[str] = None
     added_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -111,17 +144,18 @@ class UserSearchResult(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class CourseMemberCreate(BaseModel):
+class BatchMemberCreate(BaseModel):
     username: str
     expiry: Optional[datetime] = None
     amount: float = 0
     method: Optional[str] = None
 
 
-class CourseMemberResponse(BaseModel):
+class BatchMemberResponse(BaseModel):
     id: int
     username: str
     course_id: str
+    batch_id: Optional[str] = None
     expiry: Optional[datetime] = None
     joined_at: datetime
     name: str = ""
@@ -134,5 +168,28 @@ class CourseMemberResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class CourseMemberUpdate(BaseModel):
+class BatchMemberUpdate(BaseModel):
     expiry: Optional[datetime] = None
+
+
+class CourseLessonCreate(BaseModel):
+    title: str
+    link: Optional[str] = None
+    duration: Optional[str] = None
+
+
+class CourseLessonUpdate(BaseModel):
+    title: Optional[str] = None
+    link: Optional[str] = None
+    duration: Optional[str] = None
+
+
+class CourseLessonResponse(BaseModel):
+    id: int
+    course_id: str
+    title: str
+    link: Optional[str] = None
+    duration: Optional[str] = None
+    added_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

@@ -11,11 +11,15 @@ class UserCreate(BaseModel):
     password: str
     tvid: Optional[str] = None
     phone_number: Optional[str] = None
+    address: Optional[str] = None
+    country: Optional[str] = None
+    pincode: Optional[str] = None
 
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    remember: bool = False
 
 
 class UserResponse(BaseModel):
@@ -25,6 +29,9 @@ class UserResponse(BaseModel):
     email: EmailStr
     tvid: Optional[str] = None
     phone_number: Optional[str] = None
+    address: Optional[str] = None
+    country: Optional[str] = None
+    pincode: Optional[str] = None
     telegram_user_id: Optional[str] = None
     telegram_chat_id: Optional[str] = None
     discord_user_id: Optional[str] = None
@@ -32,6 +39,36 @@ class UserResponse(BaseModel):
     is_verified: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SendOTPRequest(BaseModel):
+    username: str
+    firstname: str
+    lastname: str
+    email: EmailStr
+    phone_number: str
+
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+
+class CompleteRegistrationRequest(BaseModel):
+    token: str
+    password: str
+    address: Optional[str] = None
+    country: Optional[str] = None
+    pincode: Optional[str] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
 
 
 class VerifyEmailRequest(BaseModel):

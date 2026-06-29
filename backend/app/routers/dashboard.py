@@ -5,7 +5,7 @@ from typing import Dict
 import calendar
 from sqlalchemy import func
 from app.database import get_db
-from app.models import Course, Lesson, CourseMember, Indicator, IndicatorMember, Bot, BotMember, Transaction, User
+from app.models import Course, Batch, Lesson, BatchMember, Indicator, IndicatorMember, Bot, BotMember, Transaction, User
 from app.core.deps import get_current_admin
 
 router = APIRouter(prefix="/api/admin/dashboard", tags=["Dashboard"])
@@ -124,42 +124,49 @@ def dashboard_overview(db: Session = Depends(get_db), current_admin: dict = Depe
 @router.get("/enrolling-courses")
 def enrolling_courses(db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    courses = db.query(Course).filter(
-        Course.scheduled_at.isnot(None),
-        Course.scheduled_at > now,
-    ).order_by(Course.scheduled_at.asc()).all()
-    return {
-        "courses": [
-            {
+    batches = db.query(Batch).filter(
+        Batch.scheduled_at.isnot(None),
+        Batch.scheduled_at > now,
+        Batch.status != "completed",
+    ).order_by(Batch.scheduled_at.asc()).all()
+    result = []
+    for b in batches:
+        c = db.query(Course).filter(Course.course_id == b.course_id).first()
+        if c:
+            result.append({
                 "id": c.id,
                 "course_id": c.course_id,
+                "batch_id": b.batch_id,
                 "title": c.title,
-                "participants": c.purchased_count or 0,
+                "participants": b.purchased_count or 0,
                 "price": c.price or 0,
-                "scheduled_at": c.scheduled_at.isoformat() if c.scheduled_at else None,
-            }
-            for c in courses
-        ]
-    }
+                "scheduled_at": b.scheduled_at.isoformat() if b.scheduled_at else None,
+            })
+    return {"courses": result}
 
 
 @router.get("/upcoming-sessions")
 def upcoming_sessions(db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    courses = db.query(Course).filter(
-        Course.scheduled_at.isnot(None),
-        Course.scheduled_at <= now,
-    ).order_by(Course.scheduled_at.desc()).all()
+    ongoing_batches = db.query(Batch).filter(
+        Batch.scheduled_at.isnot(None),
+        Batch.scheduled_at <= now,
+        Batch.status != "completed",
+    ).order_by(Batch.scheduled_at.desc()).all()
     result = []
-    for c in courses:
-        lessons = db.query(Lesson).filter(Lesson.course_id == c.id).order_by(Lesson.added_at.asc()).all()
+    for b in ongoing_batches:
+        c = db.query(Course).filter(Course.course_id == b.course_id).first()
+        if not c:
+            continue
+        lessons = db.query(Lesson).filter(Lesson.batch_id == b.batch_id).order_by(Lesson.added_at.asc()).all()
         for lesson in lessons:
             if lesson.type == "youtube":
                 session_time = lesson.added_at
             else:
-                session_time = lesson.start_time or c.scheduled_at
+                session_time = lesson.start_time or b.scheduled_at
             result.append({
                 "course_id": c.course_id,
+                "batch_id": b.batch_id,
                 "course_title": c.title,
                 "lesson_title": lesson.title,
                 "lesson_type": lesson.type,
@@ -195,7 +202,7 @@ def expiring_bot_members(
 def client_stats(db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
     total_users = db.query(func.count(User.id)).scalar() or 0
 
-    course_members = db.query(func.count(CourseMember.id)).scalar() or 0
+    course_members = db.query(func.count(BatchMember.id)).scalar() or 0
     indicator_members = db.query(func.count(IndicatorMember.id)).scalar() or 0
     bot_members_count = db.query(func.count(BotMember.id)).scalar() or 0
     total_members = course_members + indicator_members + bot_members_count

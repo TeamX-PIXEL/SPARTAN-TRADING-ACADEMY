@@ -6,6 +6,7 @@ import mysql.connector
 
 from app.database import get_db, get_db_connection
 from app.models import User, Transaction, Course, Indicator, Bot
+from app.models.course import Batch
 from app.schemas import UserResponse, UserPasswordUpdate
 from app.core.deps import get_current_user, get_current_admin
 from app.core.security import verify_password, get_password_hash
@@ -123,7 +124,13 @@ def get_my_purchases(db: Session = Depends(get_db), current_user: User = Depends
     """Return course, indicator, and bot IDs the current user owns via transactions."""
     transactions = db.query(Transaction).filter(Transaction.username == current_user.UserID).all()
 
-    course_ids = [t.course_id for t in transactions if t.product_section == "Course" and t.course_id]
+    course_ids = []
+    for t in transactions:
+        if t.product_section == "Course" and t.batch_id:
+            batch = db.query(Batch).filter(Batch.batch_id == t.batch_id).first()
+            if batch:
+                course_ids.append(batch.course_id)
+    course_ids = list(set(course_ids))
     indicator_ids = [t.indicator_id for t in transactions if t.product_section == "Indicator" and t.indicator_id]
 
     courses = db.query(Course).filter(Course.course_id.in_(course_ids)).all() if course_ids else []

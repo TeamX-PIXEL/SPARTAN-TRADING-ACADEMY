@@ -5,70 +5,47 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Eye, EyeOff, ArrowLeft, Check, User, Mail, Phone, MapPin, Lock, ChevronRight, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Check, Mail, Lock, ChevronRight, RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { CountryCodePicker, COUNTRIES } from "@/components/country-code-picker";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-// Step 1 schema
-const step1Schema = z.object({
-  username: z.string().min(3, { message: "Username must be at least 3 characters." }),
-  firstname: z.string().min(1, { message: "First name is required." }),
-  lastname: z.string().min(1, { message: "Last name is required." }),
+const emailSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
-  phone_number: z.string().min(6, { message: "Please enter a valid mobile number." }),
 });
 
-// OTP schema
 const otpSchema = z.object({
   otp: z.string().length(6, { message: "OTP must be 6 digits." }),
 });
 
-// Step 2 schema
-const step2Schema = z.object({
+const passwordSchema = z.object({
   password: z.string().min(6, { message: "Password must be at least 6 characters." }),
   confirmPassword: z.string().min(6, { message: "Confirm Password must be at least 6 characters." }),
-  address: z.string().min(5, { message: "Address is required." }),
-  country: z.string().min(2, { message: "Country is required." }),
-  pincode: z.string().min(4, { message: "Pincode is required." }),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match.",
   path: ["confirmPassword"],
 });
 
-type Step1Data = z.infer<typeof step1Schema>;
+type EmailData = z.infer<typeof emailSchema>;
 type OtpData = z.infer<typeof otpSchema>;
-type Step2Data = z.infer<typeof step2Schema>;
+type PasswordData = z.infer<typeof passwordSchema>;
 
-function InputField({ icon: Icon, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { icon: React.ElementType }) {
-  return (
-    <div className="relative">
-      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-        <Icon className="h-4 w-4" />
-      </div>
-      <Input {...props} className="pl-10" />
-    </div>
-  );
-}
-
-export function RegisterForm() {
-  const [step, setStep] = useState<"step1" | "otp" | "step2">("step1");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [registrationToken, setRegistrationToken] = useState("");
-  const [step1Data, setStep1Data] = useState<Step1Data | null>(null);
+export function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
+  const [step, setStep] = useState<"email" | "otp" | "password">("email");
+  const [resetToken, setResetToken] = useState("");
+  const [email, setEmail] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [countryCode, setCountryCode] = useState("+91");
 
-  const step1Form = useForm<Step1Data>({
-    resolver: zodResolver(step1Schema),
-    defaultValues: { username: "", firstname: "", lastname: "", email: "", phone_number: "" },
+  const emailForm = useForm<EmailData>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: { email: "" },
   });
 
   const otpForm = useForm<OtpData>({
@@ -76,35 +53,31 @@ export function RegisterForm() {
     defaultValues: { otp: "" },
   });
 
-  const step2Form = useForm<Step2Data>({
-    resolver: zodResolver(step2Schema),
-    defaultValues: { password: "", confirmPassword: "", address: "", country: "", pincode: "" },
+  const passwordForm = useForm<PasswordData>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
   });
 
-  const onStep1Submit = async (data: Step1Data) => {
+  const onEmailSubmit = async (data: EmailData) => {
     setIsSending(true);
-    const fullPhone = `${countryCode} ${data.phone_number}`.trim();
     try {
-      const res = await fetch(`${API_BASE}/send-otp`, {
+      const res = await fetch(`${API_BASE}/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, phone_number: fullPhone }),
+        body: JSON.stringify({ email: data.email }),
       });
       const result = await res.json();
       if (!res.ok) {
         toast.error(result.detail || "Failed to send OTP");
         return;
       }
-      setStep1Data(data);
+      setEmail(data.email);
       toast.success("OTP sent to your email!");
       setStep("otp");
       setResendCooldown(60);
       const timer = setInterval(() => {
         setResendCooldown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
+          if (prev <= 1) { clearInterval(timer); return 0; }
           return prev - 1;
         });
       }, 1000);
@@ -116,13 +89,13 @@ export function RegisterForm() {
   };
 
   const onResendOtp = async () => {
-    if (!step1Data || resendCooldown > 0) return;
+    if (!email || resendCooldown > 0) return;
     setIsSending(true);
     try {
-      const res = await fetch(`${API_BASE}/send-otp`, {
+      const res = await fetch(`${API_BASE}/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...step1Data, phone_number: `${countryCode} ${step1Data.phone_number}`.trim() }),
+        body: JSON.stringify({ email }),
       });
       const result = await res.json();
       if (!res.ok) {
@@ -134,10 +107,7 @@ export function RegisterForm() {
       setResendCooldown(60);
       const timer = setInterval(() => {
         setResendCooldown((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
+          if (prev <= 1) { clearInterval(timer); return 0; }
           return prev - 1;
         });
       }, 1000);
@@ -149,22 +119,21 @@ export function RegisterForm() {
   };
 
   const onOtpSubmit = async (data: OtpData) => {
-    if (!step1Data) return;
     setIsVerifying(true);
     try {
-      const res = await fetch(`${API_BASE}/verify-otp`, {
+      const res = await fetch(`${API_BASE}/verify-forgot-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: step1Data.email, otp: data.otp }),
+        body: JSON.stringify({ email, otp: data.otp }),
       });
       const result = await res.json();
       if (!res.ok) {
         toast.error(result.detail || "Invalid OTP");
         return;
       }
-      setRegistrationToken(result.registration_token);
-      toast.success("Email verified! Complete your profile.");
-      setStep("step2");
+      setResetToken(result.reset_token);
+      toast.success("OTP verified! Set your new password.");
+      setStep("password");
     } catch {
       toast.error("Something went wrong");
     } finally {
@@ -172,35 +141,29 @@ export function RegisterForm() {
     }
   };
 
-  const onStep2Submit = async (data: Step2Data) => {
+  const onPasswordSubmit = async (data: PasswordData) => {
     try {
-      const res = await fetch(`${API_BASE}/complete-registration`, {
+      const res = await fetch(`${API_BASE}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: registrationToken,
-          password: data.password,
-          address: data.address,
-          country: data.country,
-          pincode: data.pincode,
-        }),
+        body: JSON.stringify({ token: resetToken, password: data.password }),
       });
       const result = await res.json();
       if (!res.ok) {
-        toast.error(result.detail || "Registration failed");
+        toast.error(result.detail || "Failed to reset password");
         return;
       }
-      toast.success("Account created! Please check your email to verify.");
-      window.location.href = "/auth/v2/login";
+      toast.success("Password reset successful! You can now log in.");
+      onBack();
     } catch {
       toast.error("Something went wrong");
     }
   };
 
   const steps = [
-    { key: "step1", label: "Account" },
+    { key: "email", label: "Email" },
     { key: "otp", label: "Verify" },
-    { key: "step2", label: "Details" },
+    { key: "password", label: "New Password" },
   ];
   const currentIdx = steps.findIndex(s => s.key === step);
 
@@ -227,72 +190,30 @@ export function RegisterForm() {
         ))}
       </div>
 
-      {/* Step 1: Account Details */}
-      {step === "step1" && (
-        <form noValidate onSubmit={step1Form.handleSubmit(onStep1Submit)} className="flex flex-col gap-4">
-          <FieldGroup className="gap-3.5">
+      {/* Step 1: Enter Email */}
+      {step === "email" && (
+        <form noValidate onSubmit={emailForm.handleSubmit(onEmailSubmit)} className="flex flex-col gap-4">
+          <div className="text-center space-y-1">
+            <p className="text-sm text-muted-foreground">Enter your registered email address</p>
+          </div>
+          <FieldGroup className="gap-4">
             <Controller
-              control={step1Form.control}
-              name="username"
-              render={({ field, fieldState }) => (
-                <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                  <FieldLabel>Username</FieldLabel>
-                  <InputField icon={User} {...field} placeholder="johndoe" autoComplete="username" aria-invalid={fieldState.invalid} />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Controller
-                control={step1Form.control}
-                name="firstname"
-                render={({ field, fieldState }) => (
-                  <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                    <FieldLabel>First Name</FieldLabel>
-                    <Input {...field} placeholder="John" autoComplete="given-name" aria-invalid={fieldState.invalid} />
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                  </Field>
-                )}
-              />
-              <Controller
-                control={step1Form.control}
-                name="lastname"
-                render={({ field, fieldState }) => (
-                  <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                    <FieldLabel>Last Name</FieldLabel>
-                    <Input {...field} placeholder="Doe" autoComplete="family-name" aria-invalid={fieldState.invalid} />
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                  </Field>
-                )}
-              />
-            </div>
-            <Controller
-              control={step1Form.control}
+              control={emailForm.control}
               name="email"
               render={({ field, fieldState }) => (
                 <Field className="gap-1.5" data-invalid={fieldState.invalid}>
                   <FieldLabel>Email Address</FieldLabel>
-                  <InputField icon={Mail} {...field} type="email" placeholder="you@example.com" autoComplete="email" aria-invalid={fieldState.invalid} />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <Controller
-              control={step1Form.control}
-              name="phone_number"
-              render={({ field, fieldState }) => (
-                <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                  <FieldLabel>Mobile Number</FieldLabel>
-                  <div className="flex gap-2">
-                    <CountryCodePicker value={countryCode} onChange={setCountryCode} />
+                  <div className="relative">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                      <Mail className="h-4 w-4" />
+                    </div>
                     <Input
                       {...field}
-                      type="tel"
-                      inputMode="numeric"
-                      placeholder="98765 43210"
-                      autoComplete="tel-national"
-                      className="flex-1"
+                      type="email"
+                      placeholder="you@example.com"
+                      autoComplete="email"
                       aria-invalid={fieldState.invalid}
+                      className="pl-10"
                     />
                   </div>
                   {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
@@ -301,20 +222,25 @@ export function RegisterForm() {
             />
           </FieldGroup>
           <Button className="w-full" type="submit" disabled={isSending}>
-            {isSending ? "Sending OTP..." : "Continue"}
+            {isSending ? "Sending OTP..." : "Send Reset Code"}
             {!isSending && <ChevronRight className="w-4 h-4 ml-1" />}
           </Button>
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 cursor-pointer"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to login
+          </button>
         </form>
       )}
 
-      {/* Step 2: OTP Verification */}
+      {/* Step 2: Verify OTP */}
       {step === "otp" && (
         <form noValidate onSubmit={otpForm.handleSubmit(onOtpSubmit)} className="flex flex-col gap-4">
           <div className="text-center space-y-1">
-            <p className="text-sm text-muted-foreground">
-              Enter the 6-digit code sent to
-            </p>
-            <p className="text-sm font-semibold text-foreground">{step1Data?.email}</p>
+            <p className="text-sm text-muted-foreground">Enter the 6-digit code sent to</p>
+            <p className="text-sm font-semibold text-foreground">{email}</p>
           </div>
           <FieldGroup className="gap-4">
             <Controller
@@ -339,7 +265,7 @@ export function RegisterForm() {
             />
           </FieldGroup>
           <Button className="w-full" type="submit" disabled={isVerifying}>
-            {isVerifying ? "Verifying..." : "Verify Email"}
+            {isVerifying ? "Verifying..." : "Verify Code"}
           </Button>
           <div className="flex justify-center">
             <button
@@ -349,29 +275,32 @@ export function RegisterForm() {
               className="text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSending ? "animate-spin" : ""}`} />
-              {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : "Resend OTP"}
+              {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend OTP"}
             </button>
           </div>
           <button
             type="button"
-            onClick={() => setStep("step1")}
+            onClick={() => setStep("email")}
             className="text-sm text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 cursor-pointer"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to details
+            <ArrowLeft className="w-3.5 h-3.5" /> Back
           </button>
         </form>
       )}
 
-      {/* Step 3: Complete Profile */}
-      {step === "step2" && (
-        <form noValidate onSubmit={step2Form.handleSubmit(onStep2Submit)} className="flex flex-col gap-4">
-          <FieldGroup className="gap-3.5">
+      {/* Step 3: New Password */}
+      {step === "password" && (
+        <form noValidate onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="flex flex-col gap-4">
+          <div className="text-center space-y-1">
+            <p className="text-sm text-muted-foreground">Set your new password</p>
+          </div>
+          <FieldGroup className="gap-4">
             <Controller
-              control={step2Form.control}
+              control={passwordForm.control}
               name="password"
               render={({ field, fieldState }) => (
                 <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                  <FieldLabel>Password</FieldLabel>
+                  <FieldLabel>New Password</FieldLabel>
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                       <Lock className="h-4 w-4" />
@@ -400,7 +329,7 @@ export function RegisterForm() {
               )}
             />
             <Controller
-              control={step2Form.control}
+              control={passwordForm.control}
               name="confirmPassword"
               render={({ field, fieldState }) => (
                 <Field className="gap-1.5" data-invalid={fieldState.invalid}>
@@ -432,47 +361,9 @@ export function RegisterForm() {
                 </Field>
               )}
             />
-            <div className="border-t border-border pt-3.5 mt-1">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-3">Billing Address</p>
-            </div>
-            <Controller
-              control={step2Form.control}
-              name="address"
-              render={({ field, fieldState }) => (
-                <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                  <FieldLabel>Address</FieldLabel>
-                  <InputField icon={MapPin} {...field} placeholder="123 Main St, City" autoComplete="street-address" aria-invalid={fieldState.invalid} />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Controller
-                control={step2Form.control}
-                name="country"
-                render={({ field, fieldState }) => (
-                  <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                    <FieldLabel>Country</FieldLabel>
-                    <Input {...field} placeholder="India" autoComplete="country-name" aria-invalid={fieldState.invalid} />
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                  </Field>
-                )}
-              />
-              <Controller
-                control={step2Form.control}
-                name="pincode"
-                render={({ field, fieldState }) => (
-                  <Field className="gap-1.5" data-invalid={fieldState.invalid}>
-                    <FieldLabel>Pincode</FieldLabel>
-                    <Input {...field} placeholder="400001" inputMode="numeric" autoComplete="postal-code" aria-invalid={fieldState.invalid} />
-                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                  </Field>
-                )}
-              />
-            </div>
           </FieldGroup>
-          <Button className="w-full" type="submit" disabled={step2Form.formState.isSubmitting}>
-            {step2Form.formState.isSubmitting ? "Creating Account..." : "Create Account"}
+          <Button className="w-full" type="submit" disabled={passwordForm.formState.isSubmitting}>
+            {passwordForm.formState.isSubmitting ? "Resetting..." : "Reset Password"}
           </Button>
         </form>
       )}

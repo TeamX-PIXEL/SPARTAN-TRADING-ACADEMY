@@ -3,31 +3,20 @@
 import * as React from "react";
 
 import {
-  CalendarClock,
-  CheckCircle2,
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
   EllipsisVertical,
   GraduationCap,
+  Lock,
   Pencil,
-  Users,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +27,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Table,
   TableBody,
   TableCell,
@@ -46,34 +41,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  formatDateTime,
+  formatCurrency,
   useAcademyStore,
   type Course,
 } from "@/lib/academy-store";
 
-import { CourseThumb } from "./course-thumb";
 import { CourseFormDialog } from "./course-form-dialog";
+import { CourseThumb } from "./course-thumb";
 
 interface Props {
   courses: Course[];
 }
 
-export function OngoingCoursesTable({ courses }: Props) {
-  const goLessonsManage = useAcademyStore((s) => s.goLessonsManage);
-  const goEnrolledMembers = useAcademyStore((s) => s.goEnrolledMembers);
-  const fetchCourses = useAcademyStore((s) => s.fetchCourses);
-  const lessons = useAcademyStore((s) => s.lessons);
-  const members = useAcademyStore((s) => s.members);
-  const completeBatch = useAcademyStore((s) => s.completeBatch);
-  const fetchBatches = useAcademyStore((s) => s.fetchBatches);
-  const batches = useAcademyStore((s) => s.batches);
+export function CoursesCatalogTable({ courses }: Props) {
+  const removeCourse = useAcademyStore((s) => s.removeCourse);
+  const goCourseLessons = useAcademyStore((s) => s.goCourseLessons);
+
+  const [editing, setEditing] = React.useState<Course | null>(null);
+  const [editOpen, setEditOpen] = React.useState(false);
 
   const [pageIndex, setPageIndex] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(10);
-  const [confirmDoneOpen, setConfirmDoneOpen] = React.useState(false);
-  const [confirmDoneCourse, setConfirmDoneCourse] = React.useState<Course | null>(null);
-  const [editing, setEditing] = React.useState<Course | null>(null);
-  const [editOpen, setEditOpen] = React.useState(false);
 
   const pageCount = Math.ceil(courses.length / pageSize);
   const pagedCourses = courses.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize);
@@ -84,17 +72,30 @@ export function OngoingCoursesTable({ courses }: Props) {
     }
   }, [pageIndex, pageCount]);
 
-  function lessonCount(courseId: number) {
-    return lessons.filter((l) => l.courseId === courseId).length;
-  }
-  function memberCount(courseId: number) {
-    return members.filter((m) => m.courseId === courseId).length;
-  }
-
   function openEdit(course: Course) {
     setEditing(course);
     setEditOpen(true);
   }
+
+  async function handleRemove(course: Course) {
+    if (course.batch_count > 0) {
+      toast.error(`Cannot remove course — ${course.title} has ${course.batch_count} batch(es). Delete batches first.`);
+      return;
+    }
+    const ok = await removeCourse(course.course_id);
+    if (ok) {
+      toast.success(`Course removed — ${course.course_id} — ${course.title} was deleted.`);
+    } else {
+      toast.error("Failed to delete course.");
+    }
+  }
+
+  const DIFFICULTY_STYLES: Record<string, string> = {
+    Beginner: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    Intermediate: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    Advanced: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+    Master: "border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300",
+  };
 
   return (
     <>
@@ -104,10 +105,12 @@ export function OngoingCoursesTable({ courses }: Props) {
             <TableRow>
               <TableHead className="w-[60px] text-center">#</TableHead>
               <TableHead>Course</TableHead>
-              <TableHead className="hidden lg:table-cell">Instructor</TableHead>
-              <TableHead className="hidden md:table-cell">Started</TableHead>
-              <TableHead className="text-center">Lessons</TableHead>
-              <TableHead className="text-center">Members</TableHead>
+              <TableHead className="hidden md:table-cell">Category</TableHead>
+              <TableHead className="hidden lg:table-cell">Difficulty</TableHead>
+              <TableHead className="text-right">Price</TableHead>
+              <TableHead className="hidden md:table-cell">Duration</TableHead>
+              <TableHead className="text-center">Batches</TableHead>
+              <TableHead className="text-center">Enrolled</TableHead>
               <TableHead className="w-[64px] text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -127,22 +130,32 @@ export function OngoingCoursesTable({ courses }: Props) {
                         <p className="truncate font-medium">{course.title}</p>
                         <p className="font-mono text-[11px] text-muted-foreground">{course.course_id}</p>
                       </div>
-                      <Badge variant="outline" className="ml-1 gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
-                        <span className="size-1.5 rounded-full bg-emerald-500" />
-                        Live
-                      </Badge>
                     </div>
                   </TableCell>
-                  <TableCell className="hidden text-sm lg:table-cell">{course.lecturer}</TableCell>
-                  <TableCell className="hidden text-sm md:table-cell">{formatDateTime(course.scheduled_at)}</TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <Badge variant="outline" className="font-normal">
+                      {course.category}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <Badge variant="outline" className={`font-normal ${DIFFICULTY_STYLES[course.difficulty] ?? ""}`}>
+                      {course.difficulty}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatCurrency(course.price)}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-sm">
+                    {course.duration_months} {course.duration_months > 1 ? "Months" : "Month"}
+                  </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="secondary" className="tabular-nums">
-                      {course.lesson_count ?? 0}
+                    <Badge variant={course.batch_count > 0 ? "default" : "secondary"} className="tabular-nums">
+                      {course.batch_count}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="secondary" className="tabular-nums">
-                      {course.purchased_count ?? 0}
+                    <Badge variant={course.purchased_count > 0 ? "default" : "secondary"} className="tabular-nums">
+                      {course.purchased_count}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -158,27 +171,38 @@ export function OngoingCoursesTable({ courses }: Props) {
                           <Pencil className="mr-2 size-4" />
                           Edit Course
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => goLessonsManage(course.id)}>
+                        <DropdownMenuItem onSelect={() => goCourseLessons(course.id)}>
                           <GraduationCap className="mr-2 size-4" />
-                          Manage Lessons
-                          <CalendarClock className="ml-auto size-3.5 text-muted-foreground" />
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => goEnrolledMembers(course.id)}>
-                          <Users className="mr-2 size-4" />
-                          Manage Members
-                          <Users className="ml-auto size-3.5 text-muted-foreground" />
+                          Course Lessons
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-emerald-700 focus:text-emerald-700 dark:text-emerald-300"
-                          onSelect={() => {
-                            setConfirmDoneCourse(course);
-                            setConfirmDoneOpen(true);
-                          }}
-                        >
-                          <CheckCircle2 className="mr-2 size-4" />
-                          Mark Course Done
-                        </DropdownMenuItem>
+                        {course.batch_count === 0 ? (
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() => handleRemove(course)}
+                          >
+                            <Trash2 className="mr-2 size-4" />
+                            Remove
+                          </DropdownMenuItem>
+                        ) : (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div
+                                  className="flex w-full cursor-not-allowed items-center px-2 py-1.5 text-sm text-muted-foreground opacity-60"
+                                  role="menuitem"
+                                  aria-disabled
+                                >
+                                  <Lock className="mr-2 size-4" />
+                                  Remove
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Cannot delete — has existing batches</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -186,8 +210,8 @@ export function OngoingCoursesTable({ courses }: Props) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="h-28 text-center text-muted-foreground">
-                  No on-going courses. Upcoming courses start automatically at their scheduled date &amp; time.
+                <TableCell colSpan={9} className="h-28 text-center text-muted-foreground">
+                  No courses yet. Click &quot;New Course&quot; to create your first course.
                 </TableCell>
               </TableRow>
             )}
@@ -272,39 +296,7 @@ export function OngoingCoursesTable({ courses }: Props) {
         </div>
       </div>
 
-      <AlertDialog open={confirmDoneOpen} onOpenChange={setConfirmDoneOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Mark Course as Done?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will move <span className="font-medium text-foreground">{confirmDoneCourse?.title}</span> to the Completed tab. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={async () => {
-                if (confirmDoneCourse) {
-                  await fetchBatches(confirmDoneCourse.course_id);
-                  const courseBatches = useAcademyStore.getState().batches.filter((b) => b.course_id === confirmDoneCourse.course_id);
-                  const ongoingBatch = courseBatches.find((b) => b.status === "ongoing");
-                  if (ongoingBatch) {
-                    await completeBatch(ongoingBatch.batch_id);
-                  }
-                  await fetchCourses();
-                  toast.success(`${confirmDoneCourse.title} moved to the Completed tab.`);
-                }
-              }}
-            >
-              <CheckCircle2 className="mr-1.5 size-4" />
-              Yes, Mark Done
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <CourseFormDialog open={editOpen} onOpenChange={setEditOpen} course={editing} mode="ongoing" />
+      <CourseFormDialog open={editOpen} onOpenChange={setEditOpen} course={editing} />
     </>
   );
 }

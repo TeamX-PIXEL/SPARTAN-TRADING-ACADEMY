@@ -191,12 +191,12 @@ export const LibraryPage: React.FC = () => {
     }
   }, [library.courses]);
 
-  // Handle License renewal (Bots & Indicators — 30 days only)
+  // Handle License renewal (Bots & Indicators — 1 year)
   const handleRenewLicense = async () => {
     if (!renewingProduct) return;
     try {
       const price = renewingProduct.price;
-      const durationDays = 30;
+      const durationDays = 365;
 
       addToast(`Processing ₹${price.toLocaleString('en-IN')} license extension for "${renewingProduct.title}"...`, "info");
       
@@ -362,7 +362,7 @@ export const LibraryPage: React.FC = () => {
                 {activeCourses.map((course, index) => {
                   const scheduledDate = course.scheduled_at;
                   const isStarted = scheduledDate ? new Date(scheduledDate) <= new Date() : true;
-                  const courseLessons = lessons.filter(l => l.course_id === course.id);
+                  const courseLessons = lessons.filter(l => l.batch_id === course.batch_id);
                   const isExpanded = !!expandedCourses[course.id];
                   const toggleExpand = () => {
                     setExpandedCourses(prev => ({
@@ -556,18 +556,169 @@ export const LibraryPage: React.FC = () => {
                                 </div>
                               ) : (
                                 <div className="space-y-6">
+                                  {/* Live Google Meet Sessions Segment */}
+                                  {(() => {
+                                    const meetLessons = courseLessons.filter(l => l.type === 'meet');
+                                    if (meetLessons.length === 0) return null;
+                                    return (
+                                      <div className="space-y-3">
+                                        <div className="flex items-center gap-1.5 border-b border-[#131720] pb-2">
+                                          <Video className="w-3.5 h-3.5 text-teal-400" />
+                                          <h5 className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider font-mono">Live Google Meet Sessions ({meetLessons.length})</h5>
+                                        </div>
+                                        {meetLessons.length === 0 ? null : (
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {meetLessons.map((lesson, idx) => {
+                                              const formattedStartTime = lesson.startTime 
+                                                ? new Date(lesson.startTime).toLocaleString('en-US', {
+                                                    weekday: 'short',
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    hour12: true
+                                                  })
+                                                : undefined;
+
+                                              return (
+                                                <div 
+                                                  key={`${lesson.id}-${idx}`} 
+                                                  className="bg-[#12151c] hover:bg-[#12151c]/90 border border-[#1e222b] rounded-xl p-4 flex flex-col justify-between space-y-4"
+                                                >
+                                                  <div>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                      <span className="px-2 py-0.5 bg-teal-500/10 text-[9px] font-mono text-teal-400 font-bold tracking-wider rounded uppercase">
+                                                        Google Meet Room
+                                                      </span>
+                                                      <span className="text-[10px] text-neutral-500 font-mono font-medium">
+                                                        {lesson.duration || "Live"}
+                                                      </span>
+                                                    </div>
+                                                    <h5 className="text-[13px] font-bold text-white tracking-wide mt-2">
+                                                      {lesson.title}
+                                                    </h5>
+
+                                                    <div className="mt-3 bg-neutral-950/40 border border-[#1e222b]/50 rounded-lg p-2.5 flex items-start gap-2">
+                                                      <Clock className="w-3.5 h-3.5 text-amber-500 mt-0.5 animate-pulse" />
+                                                      <div>
+                                                        <span className="text-[9px] uppercase font-bold text-neutral-500 tracking-wider font-mono block">Meeting Start Time</span>
+                                                        <span className="text-[11px] text-amber-400 font-mono font-semibold">
+                                                          {formattedStartTime || "No start time set"}
+                                                        </span>
+                                                      </div>
+                                                    </div>
+
+                                                    <p className="text-[10px] font-mono text-[#4e5a70] mt-2">
+                                                      Created: {new Date(lesson.addedAt).toLocaleDateString()}
+                                                    </p>
+                                                  </div>
+
+                                                  <a
+                                                    href={lesson.link}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="w-full py-2 px-3.5 rounded-lg text-xs font-mono font-bold tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-500 text-white shadow-md shadow-teal-950/20"
+                                                  >
+                                                    <Video className="w-3.5 h-3.5 text-white" />
+                                                    <span>Join Google Meet Session</span>
+                                                    <ExternalLink className="w-3 h-3 ml-auto opacity-70" />
+                                                  </a>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+
+                                  {/* Live Zoom Sessions Segment */}
+                                  {(() => {
+                                    const zoomLessons = courseLessons.filter(l => l.type === 'zoom');
+                                    if (zoomLessons.length === 0) return null;
+                                    return (
+                                      <div className="space-y-3 pt-3 border-t border-[#1e222b]/30">
+                                        <div className="flex items-center gap-1.5 border-b border-[#131720] pb-2">
+                                          <Video className="w-3.5 h-3.5 text-blue-400" />
+                                          <h5 className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider font-mono">Live Zoom Sessions ({zoomLessons.length})</h5>
+                                        </div>
+                                        {zoomLessons.length === 0 ? null : (
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {zoomLessons.map((lesson, idx) => {
+                                              const formattedStartTime = lesson.startTime 
+                                                ? new Date(lesson.startTime).toLocaleString('en-US', {
+                                                    weekday: 'short',
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    hour12: true
+                                                  })
+                                                : undefined;
+
+                                              return (
+                                                <div 
+                                                  key={`${lesson.id}-${idx}`} 
+                                                  className="bg-[#12151c] hover:bg-[#12151c]/90 border border-[#1e222b] rounded-xl p-4 flex flex-col justify-between space-y-4"
+                                                >
+                                                  <div>
+                                                    <div className="flex items-center justify-between gap-2">
+                                                      <span className="px-2 py-0.5 bg-blue-500/10 text-[9px] font-mono text-blue-400 font-bold tracking-wider rounded uppercase">
+                                                        Live Zoom Stream
+                                                      </span>
+                                                      <span className="text-[10px] text-neutral-500 font-mono font-medium">
+                                                        {lesson.duration || "Live"}
+                                                      </span>
+                                                    </div>
+                                                    <h5 className="text-[13px] font-bold text-white tracking-wide mt-2">
+                                                      {lesson.title}
+                                                    </h5>
+
+                                                    <div className="mt-3 bg-neutral-950/40 border border-[#1e222b]/50 rounded-lg p-2.5 flex items-start gap-2">
+                                                      <Clock className="w-3.5 h-3.5 text-amber-500 mt-0.5 animate-pulse" />
+                                                      <div>
+                                                        <span className="text-[9px] uppercase font-bold text-neutral-500 tracking-wider font-mono block">Meeting Start Time</span>
+                                                        <span className="text-[11px] text-amber-400 font-mono font-semibold">
+                                                          {formattedStartTime || "No start time set"}
+                                                        </span>
+                                                      </div>
+                                                    </div>
+
+                                                    <p className="text-[10px] font-mono text-[#4e5a70] mt-2">
+                                                      Created: {new Date(lesson.addedAt).toLocaleDateString()}
+                                                    </p>
+                                                  </div>
+
+                                                  <a
+                                                    href={lesson.link}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="w-full py-2 px-3.5 rounded-lg text-xs font-mono font-bold tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-950/20"
+                                                  >
+                                                    <Video className="w-3.5 h-3.5 text-white" />
+                                                    <span>Enter Live Zoom Webinar</span>
+                                                    <ExternalLink className="w-3 h-3 ml-auto opacity-70" />
+                                                  </a>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
+
                                   {/* Recorded YouTube Classes Segment */}
                                   {(() => {
                                     const youtubeLessons = courseLessons.filter(l => l.type === 'youtube');
+                                    if (youtubeLessons.length === 0) return null;
                                     return (
-                                      <div className="space-y-3">
+                                      <div className="space-y-3 pt-3 border-t border-[#1e222b]/30">
                                         <div className="flex items-center gap-1.5 border-b border-[#131720] pb-2">
                                           <Play className="w-3 text-rose-500 fill-rose-500" />
                                           <h5 className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider font-mono">Recorded Lectures ({youtubeLessons.length})</h5>
                                         </div>
-                                        {youtubeLessons.length === 0 ? (
-                                          <p className="text-xs text-neutral-600 font-mono italic">No recorded YouTube classes uploaded yet.</p>
-                                        ) : (
+                                        {youtubeLessons.length === 0 ? null : (
                                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             {youtubeLessons.map((lesson, idx) => (
                                               <div 
@@ -608,96 +759,6 @@ export const LibraryPage: React.FC = () => {
                                       </div>
                                     );
                                   })()}
-
-                                  {/* Live Zoom / Google Meet Streams Segment */}
-                                  {(() => {
-                                    const liveLessons = courseLessons.filter(l => l.type === 'zoom' || l.type === 'meet');
-                                    return (
-                                      <div className="space-y-3 pt-3 border-t border-[#1e222b]/30">
-                                        <div className="flex items-center gap-1.5 border-b border-[#131720] pb-2">
-                                          <Video className="w-3.5 h-3.5 text-blue-400" />
-                                          <h5 className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider font-mono">Live Sessions & Invites ({liveLessons.length})</h5>
-                                        </div>
-                                        {liveLessons.length === 0 ? (
-                                          <p className="text-xs text-neutral-600 font-mono italic">No live meetings configured yet. Create a Meet/Zoom link below to launch one!</p>
-                                        ) : (
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {liveLessons.map((lesson, idx) => {
-                                              const formattedStartTime = lesson.startTime 
-                                                ? new Date(lesson.startTime).toLocaleString('en-US', {
-                                                    weekday: 'short',
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                    hour12: true
-                                                  })
-                                                : undefined;
-
-                                              return (
-                                                <div 
-                                                  key={`${lesson.id}-${idx}`} 
-                                                  className="bg-[#12151c] hover:bg-[#12151c]/90 border border-[#1e222b] rounded-xl p-4 flex flex-col justify-between space-y-4"
-                                                >
-                                                  <div>
-                                                    <div className="flex items-center justify-between gap-2">
-                                                      {lesson.type === 'zoom' ? (
-                                                        <span className="px-2 py-0.5 bg-blue-500/10 text-[9px] font-mono text-blue-400 font-bold tracking-wider rounded uppercase">
-                                                          Live Zoom Stream
-                                                        </span>
-                                                      ) : (
-                                                        <span className="px-2 py-0.5 bg-teal-500/10 text-[9px] font-mono text-teal-400 font-bold tracking-wider rounded uppercase">
-                                                          Google Meet Room
-                                                        </span>
-                                                      )}
-                                                      <span className="text-[10px] text-neutral-500 font-mono font-medium">
-                                                        {lesson.duration || "Live"}
-                                                      </span>
-                                                    </div>
-                                                    <h5 className="text-[13px] font-bold text-white tracking-wide mt-2">
-                                                      {lesson.title}
-                                                    </h5>
-
-                                                    {/* Meeting start time beautifully presented */}
-                                                    <div className="mt-3 bg-neutral-950/40 border border-[#1e222b]/50 rounded-lg p-2.5 flex items-start gap-2">
-                                                      <Clock className="w-3.5 h-3.5 text-amber-500 mt-0.5 animate-pulse" />
-                                                      <div>
-                                                        <span className="text-[9px] uppercase font-bold text-neutral-500 tracking-wider font-mono block">Meeting Start Time</span>
-                                                        <span className="text-[11px] text-amber-400 font-mono font-semibold">
-                                                          {formattedStartTime || "No start time set"}
-                                                        </span>
-                                                      </div>
-                                                    </div>
-
-                                                    <p className="text-[10px] font-mono text-[#4e5a70] mt-2">
-                                                      Created: {new Date(lesson.addedAt).toLocaleDateString()}
-                                                    </p>
-                                                  </div>
-
-                                                  <a
-                                                    href={lesson.link}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className={`w-full py-2 px-3.5 rounded-lg text-xs font-mono font-bold tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 ${
-                                                      lesson.type === 'zoom' 
-                                                        ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-950/20' 
-                                                        : 'bg-teal-600 hover:bg-teal-500 text-white shadow-md shadow-teal-950/20'
-                                                    }`}
-                                                  >
-                                                    <Video className="w-3.5 h-3.5 text-white" />
-                                                    <span>
-                                                      {lesson.type === 'zoom' ? 'Enter Live Zoom Webinar' : 'Join Google Meet Session'}
-                                                    </span>
-                                                    <ExternalLink className="w-3 h-3 ml-auto opacity-70" />
-                                                  </a>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })()}
                                 </div>
                               )}
                             </div>
@@ -723,7 +784,7 @@ export const LibraryPage: React.FC = () => {
               <div className="grid grid-cols-1 gap-8">
                 {completedCourses.map((course, index) => {
                   const scheduledDate = course.scheduled_at;
-                  const courseLessons = lessons.filter(l => l.course_id === course.id);
+                  const courseLessons = lessons.filter(l => l.batch_id === course.batch_id);
 
                   return (
                     <div 
@@ -1174,7 +1235,7 @@ export const LibraryPage: React.FC = () => {
             <div className="p-3 bg-[#12151c] rounded-xl border border-[#1e222b] flex justify-between items-center text-xs">
               <div>
                 <span className="text-[10px] text-blue-400 font-mono font-bold block uppercase tracking-wide">RENEWAL PERIOD</span>
-                <span className="text-neutral-300 font-sans">30 Days License Extension</span>
+                <span className="text-neutral-300 font-sans">1 Year License Extension</span>
               </div>
               <span className="font-mono font-black text-blue-400 text-sm">₹{price.toLocaleString('en-IN')}</span>
             </div>
@@ -1230,7 +1291,7 @@ export const LibraryPage: React.FC = () => {
             </div>
 
             <p className="text-[10px] text-neutral-500 font-mono leading-normal text-center bg-[#07080a] p-2 rounded-lg border border-[#1e222b]">
-              Your TradingView ID <span className="text-emerald-400 font-semibold">[{user?.tvid || "Not Logged"}]</span> will retain permission tags in Discord even if the 30-day course materials conclude!
+              Your TradingView ID <span className="text-emerald-400 font-semibold">[{user?.tvid || "Not Logged"}]</span> will retain permission tags in Discord even if the 1-year course materials conclude!
             </p>
 
             {/* Actions */}

@@ -58,6 +58,11 @@ interface TransactionRow {
   amount: number;
   method: string | null;
   status: string;
+  settlement_date: string | null;
+  address: string | null;
+  country: string | null;
+  pincode: string | null;
+  username: string;
 }
 
 const SUMMARY_DEFAULTS: SummaryResponse = {
@@ -131,6 +136,11 @@ export default async function Page() {
     amount: t.amount,
     status: t.status as Payment["status"],
     method: (t.method ?? "Other") as Payment["method"],
+    settlement_date: t.settlement_date,
+    address: t.address,
+    country: t.country,
+    pincode: t.pincode,
+    username: t.username,
   }));
 
   return (

@@ -414,15 +414,16 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenCart, searchQuery, s
                   <span>Account Settings</span>
                 </button>
 
-                {/* Simulated logouts */}
                 <button
                   type="button"
                   onClick={() => {
                     setShowProfileMenu(false);
-                    // Just reset TVID to simulate a logged out or reset state
+                    localStorage.removeItem('access_token');
+                    sessionStorage.removeItem('access_token');
                     localStorage.removeItem('dealdeck_purchases');
                     localStorage.removeItem('dealdeck_cart');
-                    window.location.reload();
+                    localStorage.removeItem('dealdeck_notifications');
+                    window.location.href = '/auth/v2/login';
                   }}
                   className="w-full flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-rose-950/20 text-rose-400 hover:text-rose-350 transition-colors text-left"
                 >

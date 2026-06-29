@@ -124,6 +124,16 @@ export const AlertsPage: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-8">
+          {bots.length === 0 ? (
+            <div className="text-center py-20 border border-dashed border-[#1e222b] rounded-2xl max-w-lg mx-auto">
+              <Zap className="w-12 h-12 text-neutral-700 mx-auto mb-4" />
+              <h3 className="text-base font-semibold text-white">No Bots Available</h3>
+              <p className="text-xs text-neutral-500 mt-2 max-w-sm mx-auto leading-relaxed">
+                There are currently no automated bots running. Check back soon — new bots are deployed regularly.
+              </p>
+            </div>
+          ) : (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {bots.map((bot) => (
               <ProductCard
@@ -147,6 +157,8 @@ export const AlertsPage: React.FC = () => {
             <div className="text-center py-8 border-t border-[#1e222b]/40 text-xs font-mono text-neutral-500">
               ● Server-side grid models synchronized perfectly ●
             </div>
+          )}
+          </>
           )}
         </div>
       )}

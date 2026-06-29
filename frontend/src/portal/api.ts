@@ -271,6 +271,7 @@ export const API = {
         scheduled_at: c.scheduled_at,
         discord_renewal_price: c.discord_renewal_price ?? undefined,
         status: c.status || "upcoming",
+        batch_id: c.batch_id || undefined,
       })),
       indicators: (d.indicators || []).map((i: any) => ({
         id: i.indicator_id,
@@ -350,7 +351,7 @@ export const API = {
     const data = await res.json();
     return data.map((l: any) => ({
       id: l.id,
-      course_id: l.course_id,
+      batch_id: l.batch_id,
       title: l.title,
       type: l.type,
       link: l.link,
@@ -442,7 +443,7 @@ export const API = {
     const d = await res.json();
     return {
       id: String(d.id),
-      course_id: courseId,
+      batch_id: d.batch_id || undefined,
       title: d.title,
       type: d.type,
       link: d.link,

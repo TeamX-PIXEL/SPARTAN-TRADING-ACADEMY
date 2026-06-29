@@ -6,7 +6,7 @@ import secrets
 
 from app.database import get_db
 from app.models import AdminUser, User, Course, Indicator, Bot, Transaction
-from app.models.course import CourseMember
+from app.models.course import Batch, BatchMember
 from app.models.indicator import IndicatorMember
 from app.models.bot import BotMember
 from app.schemas import AdminCreate, AdminLoginRequest, ClientCreate, ClientUpdate
@@ -157,16 +157,16 @@ def get_user_courses(user_id: int, db: Session = Depends(get_db), current_admin=
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    members = db.query(CourseMember).filter(CourseMember.username == user.UserID).all()
+    members = db.query(BatchMember).join(Batch, Batch.batch_id == BatchMember.batch_id).filter(BatchMember.username == user.UserID).all()
     results = []
     for m in members:
-        course = db.query(Course).filter(Course.course_id == m.course_id).first()
+        course = db.query(Course).filter(Course.course_id == m.batch.course_id).first() if m.batch else None
         txn = (
             db.query(Transaction)
             .filter(
                 Transaction.username == user.UserID,
                 Transaction.product_section == "Course",
-                Transaction.course_id == m.course_id,
+                Transaction.batch_id == m.batch_id,
             )
             .order_by(Transaction.id.desc())
             .first()
@@ -174,8 +174,9 @@ def get_user_courses(user_id: int, db: Session = Depends(get_db), current_admin=
         access_type = "paid" if txn and txn.amount and txn.amount > 0 else "free"
         results.append({
             "member_id": m.id,
-            "product_id": m.course_id,
-            "title": course.title if course else m.course_id,
+            "product_id": m.batch.course_id if m.batch else None,
+            "batch_id": m.batch_id,
+            "title": course.title if course else (m.batch.course_id if m.batch else None),
             "access_type": access_type,
             "joined_at": m.joined_at,
             "expiry": m.expiry,

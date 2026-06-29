@@ -21,12 +21,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCart, isCollapsed, onTog
     { path: "/portal/alerts", label: "Automated Bots", icon: Zap },
     { path: "/portal/library", label: "My Library", icon: Library },
     { path: "/portal/history", label: "Payment History", icon: CreditCard },
-    { path: "https://t.me/stoic_trader", label: "Support Chat", icon: HelpCircle, isExternal: true },
+    { path: "/portal/support", label: "Support", icon: HelpCircle },
     { path: "/portal/settings", label: "Portal Settings", icon: Settings },
   ];
 
   const activeIndex = navItems.findIndex((item) => {
-    if (item.isExternal) return false;
     return currentPath.startsWith(item.path);
   });
 
@@ -74,29 +73,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenCart, isCollapsed, onTog
           {navItems.map((item, index) => {
             const Icon = item.icon;
             const isActive = index === activeIndex;
-
-            if (item.isExternal) {
-              return (
-                <a
-                  key={item.path}
-                  id="sidebar-nav-support"
-                  href={item.path}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`relative h-11 flex items-center px-4 rounded-lg text-[13px] font-medium tracking-wide transition-colors duration-200 group overflow-hidden text-neutral-400 hover:text-white ${
-                    isCollapsed ? "justify-center px-0" : "gap-3.5"
-                  }`}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <Icon className="w-4 h-4 transition-transform group-hover:scale-110 duration-200 shrink-0 text-neutral-400 group-hover:text-white" />
-                  {!isCollapsed && (
-                    <span className="transition-opacity duration-300 opacity-100 whitespace-nowrap text-left truncate">
-                      {item.label}
-                    </span>
-                  )}
-                </a>
-              );
-            }
 
             return (
               <Link

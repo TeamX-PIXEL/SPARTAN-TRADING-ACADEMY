@@ -21,15 +21,32 @@ export interface Course {
   category: string;
   features: string[];
   duration_months: number;
-  lecturer: string;
   difficulty: Difficulty;
-  scheduled_at: string;
+  course_thumbnail?: string;
   purchased_count: number;
+  batch_count: number;
   status: CourseStatus;
   lesson_count?: number;
   completed_at?: string;
+  scheduled_at: string;
+  lecturer: string;
   discord_channel_id?: string;
   discord_renewal_price?: number;
+}
+
+export interface Batch {
+  id: number;
+  batch_id: string;
+  course_id: string;
+  instructor: string;
+  purchased_count: number;
+  status: CourseStatus;
+  scheduled_at: string;
+  completed_at?: string;
+  discord_channel_id?: string;
+  discord_renewal_price?: number;
+  created_at: string;
+  lesson_count?: number;
 }
 
 export type LessonType = "youtube" | "zoom" | "meet";
@@ -89,6 +106,15 @@ export interface Bot {
   updated_at?: string;
 }
 
+export interface CourseLesson {
+  id: number;
+  course_id: string;
+  title: string;
+  link?: string;
+  duration?: string;
+  added_at: string;
+}
+
 export type AccessType = "free" | "paid";
 
 export interface Member {
@@ -127,15 +153,34 @@ function mapCourse(raw: any): Course {
     category: raw.category ?? "General",
     features: raw.features ?? [],
     duration_months: raw.duration_months ?? 1,
-    lecturer: raw.lecturer ?? "TBA",
     difficulty: raw.difficulty ?? "Beginner",
-    scheduled_at: raw.scheduled_at ?? "",
+    course_thumbnail: raw.course_thumbnail ?? undefined,
     purchased_count: raw.purchased_count ?? 0,
+    batch_count: raw.batch_count ?? 0,
     status: raw.status ?? "upcoming",
     lesson_count: raw.lesson_count ?? 0,
     completed_at: raw.completed_at ?? undefined,
+    scheduled_at: raw.scheduled_at ?? "",
+    lecturer: raw.lecturer ?? "",
     discord_channel_id: raw.discord_channel_id ?? undefined,
     discord_renewal_price: raw.discord_renewal_price ?? undefined,
+  };
+}
+
+function mapBatch(raw: any): Batch {
+  return {
+    id: raw.id,
+    batch_id: raw.batch_id,
+    course_id: raw.course_id,
+    instructor: raw.instructor ?? "",
+    purchased_count: raw.purchased_count ?? 0,
+    status: raw.status ?? "upcoming",
+    scheduled_at: raw.scheduled_at ?? "",
+    completed_at: raw.completed_at ?? undefined,
+    discord_channel_id: raw.discord_channel_id ?? undefined,
+    discord_renewal_price: raw.discord_renewal_price ?? undefined,
+    created_at: raw.created_at ?? "",
+    lesson_count: raw.lesson_count ?? 0,
   };
 }
 
@@ -247,8 +292,10 @@ export type Section = "academy" | "indicators" | "bots";
 
 export type AcademyView =
   | { name: "academy" }
-  | { name: "enrolled-members"; courseId: number }
-  | { name: "lessons-manage"; courseId: number }
+  | { name: "enrolled-members"; courseId: number; batchId?: string }
+  | { name: "lessons-manage"; courseId: number; batchId?: string }
+  | { name: "course-lessons"; courseId: number }
+  | { name: "batches-manage"; courseId: number }
   | { name: "indicators" }
   | { name: "indicator-members"; indicatorId: number }
   | { name: "bots" }
@@ -261,7 +308,9 @@ export type AcademyView =
 interface AcademyState {
   section: Section;
   courses: Course[];
+  batches: Batch[];
   lessons: Lesson[];
+  courseLessons: CourseLesson[];
   members: Member[];
   indicators: Indicator[];
   bots: Bot[];
@@ -271,18 +320,29 @@ interface AcademyState {
   setSection: (section: Section) => void;
   setView: (view: AcademyView) => void;
   goAcademy: () => void;
-  goEnrolledMembers: (courseId: number) => void;
-  goLessonsManage: (courseId: number) => void;
+  goEnrolledMembers: (courseId: number, batchId?: string) => void;
+  goLessonsManage: (courseId: number, batchId?: string) => void;
+  goCourseLessons: (courseId: number) => void;
+  goBatchesManage: (courseId: number) => void;
   goIndicators: () => void;
   goIndicatorMembers: (indicatorId: number) => void;
   goBots: () => void;
   goBotMembers: (botId: number) => void;
 
   fetchCourses: () => Promise<void>;
-  addCourse: (data: Omit<Course, "id" | "purchased_count" | "status">) => Promise<Course | null>;
+  fetchBatches: (courseId: string) => Promise<void>;
+  addCourse: (data: Omit<Course, "id">) => Promise<Course | null>;
   updateCourse: (courseId: string, patch: Partial<Course>) => Promise<Course | null>;
   removeCourse: (courseId: string) => Promise<boolean>;
-  markCourseCompleted: (courseId: string) => Promise<Course | null>;
+  addBatch: (courseId: string, data: Omit<Batch, "id" | "batch_id" | "purchased_count" | "status" | "created_at"> & { batch_id?: string }) => Promise<Batch | null>;
+  updateBatch: (batchId: string, patch: Partial<Batch>) => Promise<Batch | null>;
+  removeBatch: (batchId: string) => Promise<boolean>;
+  completeBatch: (batchId: string) => Promise<Batch | null>;
+
+  fetchCourseLessons: (courseId: string) => Promise<void>;
+  addCourseLesson: (courseId: string, data: { title: string; link?: string; duration?: string }) => Promise<CourseLesson | null>;
+  updateCourseLesson: (lessonId: number, patch: Partial<CourseLesson>) => Promise<CourseLesson | null>;
+  removeCourseLesson: (lessonId: number) => Promise<boolean>;
 
   fetchLessons: (courseId: string) => Promise<void>;
   addLesson: (courseId: string, data: Omit<Lesson, "id" | "addedAt" | "courseId">) => Promise<Lesson | null>;
@@ -315,7 +375,9 @@ interface AcademyState {
 export const useAcademyStore = create<AcademyState>((set, get) => ({
   section: "academy",
   courses: [],
+  batches: [],
   lessons: [],
+  courseLessons: [],
   indicators: [],
   members: [],
   bots: [],
@@ -325,8 +387,10 @@ export const useAcademyStore = create<AcademyState>((set, get) => ({
   setSection: (section) => set({ section, view: { name: section } }),
   setView: (view) => set({ view }),
   goAcademy: () => set({ section: "academy", view: { name: "academy" } }),
-  goEnrolledMembers: (courseId) => set({ view: { name: "enrolled-members", courseId } }),
-  goLessonsManage: (courseId) => set({ view: { name: "lessons-manage", courseId } }),
+  goEnrolledMembers: (courseId, batchId) => set({ view: { name: "enrolled-members", courseId, batchId } }),
+  goLessonsManage: (courseId, batchId) => set({ view: { name: "lessons-manage", courseId, batchId } }),
+  goCourseLessons: (courseId) => set({ view: { name: "course-lessons", courseId } }),
+  goBatchesManage: (courseId) => set({ view: { name: "batches-manage", courseId } }),
   goIndicators: () => set({ section: "indicators", view: { name: "indicators" } }),
   goIndicatorMembers: (indicatorId) => set({ view: { name: "indicator-members", indicatorId } }),
   goBots: () => set({ section: "bots", view: { name: "bots" } }),
@@ -360,11 +424,7 @@ export const useAcademyStore = create<AcademyState>((set, get) => ({
       category: courseData.category,
       features: courseData.features,
       duration_months: courseData.duration_months,
-      lecturer: courseData.lecturer,
       difficulty: courseData.difficulty,
-      scheduled_at: courseData.scheduled_at || null,
-      discord_channel_id: courseData.discord_channel_id || undefined,
-      discord_renewal_price: courseData.discord_renewal_price ?? undefined,
     };
 
     try {
@@ -393,10 +453,7 @@ export const useAcademyStore = create<AcademyState>((set, get) => ({
     if (patch.category !== undefined) payload.category = patch.category;
     if (patch.features !== undefined) payload.features = patch.features;
     if (patch.duration_months !== undefined) payload.duration_months = patch.duration_months;
-    if (patch.lecturer !== undefined) payload.lecturer = patch.lecturer;
     if (patch.difficulty !== undefined) payload.difficulty = patch.difficulty;
-    if (patch.scheduled_at !== undefined) payload.scheduled_at = patch.scheduled_at;
-    if (patch.completed_at !== undefined) payload.completed_at = patch.completed_at;
     if (patch.discord_channel_id !== undefined) payload.discord_channel_id = patch.discord_channel_id;
     if (patch.discord_renewal_price !== undefined) payload.discord_renewal_price = patch.discord_renewal_price;
 
@@ -433,11 +490,167 @@ export const useAcademyStore = create<AcademyState>((set, get) => ({
     return false;
   },
 
-  markCourseCompleted: async (courseId) => {
-    return get().updateCourse(courseId, {
-      completed_at: new Date().toISOString(),
-      status: "completed",
-    });
+  // ── BATCHES ──────────────────────────────────────────────────────────────
+
+  fetchBatches: async (courseId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/batches`);
+      if (res.ok) {
+        const data = await res.json();
+        set((s) => {
+          const other = s.batches.filter((b) => b.course_id !== courseId);
+          return { batches: [...other, ...(data.batches || []).map(mapBatch)] };
+        });
+      }
+    } catch {}
+  },
+
+  addBatch: async (courseId, data) => {
+    const payload: any = {
+      course_id: courseId,
+      instructor: data.instructor,
+      scheduled_at: data.scheduled_at || null,
+      discord_channel_id: data.discord_channel_id || undefined,
+      discord_renewal_price: data.discord_renewal_price ?? undefined,
+    };
+    if ((data as any).batch_id) payload.batch_id = (data as any).batch_id;
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/batches`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const batch = mapBatch(raw);
+        set((s) => ({ batches: [...s.batches, batch] }));
+        return batch;
+      }
+    } catch {}
+    return null;
+  },
+
+  updateBatch: async (batchId, patch) => {
+    const payload: any = {};
+    if (patch.instructor !== undefined) payload.instructor = patch.instructor;
+    if (patch.scheduled_at !== undefined) payload.scheduled_at = patch.scheduled_at;
+    if (patch.discord_channel_id !== undefined) payload.discord_channel_id = patch.discord_channel_id;
+    if (patch.discord_renewal_price !== undefined) payload.discord_renewal_price = patch.discord_renewal_price;
+
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/batches/${encodeURIComponent(batchId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const batch = mapBatch(raw);
+        set((s) => ({
+          batches: s.batches.map((b) => (b.batch_id === batchId ? batch : b)),
+        }));
+        return batch;
+      }
+    } catch {}
+    return null;
+  },
+
+  removeBatch: async (batchId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/batches/${encodeURIComponent(batchId)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((s) => ({
+          batches: s.batches.filter((b) => b.batch_id !== batchId),
+        }));
+        return true;
+      }
+    } catch {}
+    return false;
+  },
+
+  completeBatch: async (batchId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/batches/${encodeURIComponent(batchId)}/complete`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        const batch = mapBatch(raw);
+        set((s) => ({
+          batches: s.batches.map((b) => (b.batch_id === batchId ? batch : b)),
+        }));
+        return batch;
+      }
+    } catch {}
+    return null;
+  },
+
+  // ── COURSE LESSONS (pre-launch YouTube) ───────────────────────────────
+
+  fetchCourseLessons: async (courseId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/course-lessons`);
+      if (res.ok) {
+        const data = await res.json();
+        set({ courseLessons: data });
+      }
+    } catch {}
+  },
+
+  addCourseLesson: async (courseId, data) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/courses/${encodeURIComponent(courseId)}/course-lessons`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        set((s) => ({ courseLessons: [...s.courseLessons, raw] }));
+        return raw;
+      }
+    } catch {}
+    return null;
+  },
+
+  updateCourseLesson: async (lessonId, patch) => {
+    const payload: any = {};
+    if (patch.title !== undefined) payload.title = patch.title;
+    if (patch.link !== undefined) payload.link = patch.link;
+    if (patch.duration !== undefined) payload.duration = patch.duration;
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/course-lessons/${lessonId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const raw = await res.json();
+        set((s) => ({
+          courseLessons: s.courseLessons.map((l) => (l.id === lessonId ? raw : l)),
+        }));
+        return raw;
+      }
+    } catch {}
+    return null;
+  },
+
+  removeCourseLesson: async (lessonId) => {
+    try {
+      const res = await fetchWithAuth(`${API_BASE_URL}/api/admin/course-lessons/${lessonId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((s) => ({
+          courseLessons: s.courseLessons.filter((l) => l.id !== lessonId),
+        }));
+        return true;
+      }
+    } catch {}
+    return false;
   },
 
   // ── LESSONS ──────────────────────────────────────────────────────────────

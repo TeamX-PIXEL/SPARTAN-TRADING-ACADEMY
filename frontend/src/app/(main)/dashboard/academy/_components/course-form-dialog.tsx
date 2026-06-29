@@ -41,9 +41,7 @@ interface FormState {
   category: string;
   features: string[];
   duration_months: string;
-  lecturer: string;
   difficulty: Difficulty;
-  scheduled_at: string;
   image: string;
   discord_channel_id: string;
   discord_renewal_price: string;
@@ -58,27 +56,19 @@ const EMPTY: FormState = {
   category: "",
   features: ["", "", "", ""],
   duration_months: "1",
-  lecturer: "",
   difficulty: "Beginner",
-  scheduled_at: "",
   image: "",
   discord_channel_id: "",
   discord_renewal_price: "",
 };
-
-function isoToLocalInput(iso?: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 const DIFFICULTIES: Difficulty[] = ["Beginner", "Intermediate", "Advanced", "Master"];
 
 export function CourseFormDialog({ open, onOpenChange, course, mode = "upcoming" }: CourseFormDialogProps) {
   const addCourse = useAcademyStore((s) => s.addCourse);
   const updateCourse = useAcademyStore((s) => s.updateCourse);
+  const updateBatch = useAcademyStore((s) => s.updateBatch);
+  const fetchBatches = useAcademyStore((s) => s.fetchBatches);
 
   const discordOnly = mode === "ongoing" || mode === "completed";
 
@@ -106,9 +96,7 @@ export function CourseFormDialog({ open, onOpenChange, course, mode = "upcoming"
           course.features[3] ?? "",
         ],
         duration_months: String(course.duration_months),
-        lecturer: course.lecturer,
         difficulty: course.difficulty,
-        scheduled_at: isoToLocalInput(course.scheduled_at),
         image: course.image,
         discord_channel_id: course.discord_channel_id ?? "",
         discord_renewal_price: course.discord_renewal_price != null ? String(course.discord_renewal_price) : "",
@@ -142,7 +130,6 @@ export function CourseFormDialog({ open, onOpenChange, course, mode = "upcoming"
     : form.course_id.trim() &&
       form.title.trim() &&
       form.price.trim() &&
-      form.scheduled_at &&
       !idTaken;
 
   function handleImageFile(file: File | null) {
@@ -160,27 +147,57 @@ export function CourseFormDialog({ open, onOpenChange, course, mode = "upcoming"
     if (!valid) return;
     setSaving(true);
 
-    const payload = {
-      course_id: form.course_id.trim().toUpperCase().replace(/\s+/g, "-"),
-      title: form.title.trim(),
-      description: form.description.trim(),
-      longDescription: form.longDescription.trim() || "",
-      price: parseFloat(form.price) || 0,
-      image: form.image,
-      category: form.category.trim() || "General",
-      features: form.features.map((f) => f.trim()).filter(Boolean),
-      duration_months: parseInt(form.duration_months, 10) || 1,
-      lecturer: form.lecturer.trim() || "TBA",
-      difficulty: form.difficulty,
-      scheduled_at: form.scheduled_at ? new Date(form.scheduled_at).toISOString() : "",
-      discord_channel_id: form.discord_channel_id.trim() || undefined,
-      discord_renewal_price: form.discord_renewal_price ? parseFloat(form.discord_renewal_price) || undefined : undefined,
-    };
+    const courseId = form.course_id.trim().toUpperCase().replace(/\s+/g, "-");
 
     if (isEdit && course) {
-      await updateCourse(course.course_id, payload);
+      if (discordOnly) {
+        await updateCourse(course.course_id, {
+          discord_channel_id: form.discord_channel_id.trim() || undefined,
+          discord_renewal_price: form.discord_renewal_price ? parseFloat(form.discord_renewal_price) || undefined : undefined,
+        });
+        await fetchBatches(course.course_id);
+        const state = useAcademyStore.getState();
+        const courseBatches = state.batches.filter((b) => b.course_id === course.course_id);
+        const targetBatch = courseBatches.find((b) => b.status === "ongoing" || b.status === "upcoming");
+        if (targetBatch) {
+          await updateBatch(targetBatch.batch_id, {
+            discord_channel_id: form.discord_channel_id.trim() || undefined,
+            discord_renewal_price: form.discord_renewal_price ? parseFloat(form.discord_renewal_price) || undefined : undefined,
+          });
+        }
+      } else {
+        await updateCourse(course.course_id, {
+          title: form.title.trim(),
+          description: form.description.trim(),
+          longDescription: form.longDescription.trim() || "",
+          price: parseFloat(form.price) || 0,
+          image: form.image,
+          category: form.category.trim() || "General",
+          features: form.features.map((f) => f.trim()).filter(Boolean),
+          duration_months: parseInt(form.duration_months, 10) || 1,
+          difficulty: form.difficulty,
+          discord_channel_id: form.discord_channel_id.trim() || undefined,
+          discord_renewal_price: form.discord_renewal_price ? parseFloat(form.discord_renewal_price) || undefined : undefined,
+        });
+      }
     } else {
-      await addCourse(payload);
+      await addCourse({
+        course_id: courseId,
+        title: form.title.trim(),
+        description: form.description.trim(),
+        longDescription: form.longDescription.trim() || "",
+        price: parseFloat(form.price) || 0,
+        image: form.image,
+        category: form.category.trim() || "General",
+        features: form.features.map((f) => f.trim()).filter(Boolean),
+        duration_months: parseInt(form.duration_months, 10) || 1,
+        difficulty: form.difficulty,
+        purchased_count: 0,
+        batch_count: 0,
+        status: "upcoming",
+        scheduled_at: "",
+        lecturer: "",
+      });
     }
     setSaving(false);
     onOpenChange(false);
@@ -310,13 +327,16 @@ export function CourseFormDialog({ open, onOpenChange, course, mode = "upcoming"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cf-start">Start Date &amp; Time</Label>
+              <Label htmlFor="cf-duration">Duration (Months)</Label>
               <Input
-                id="cf-start"
-                type="datetime-local"
-                value={form.scheduled_at}
-                onChange={(e) => set("scheduled_at", e.target.value)}
+                id="cf-duration"
+                type="number"
+                min={1}
+                value={form.duration_months}
+                onChange={(e) => set("duration_months", e.target.value)}
+                placeholder="e.g. 6"
               />
+              <p className="text-[11px] text-muted-foreground">Course length in whole months.</p>
             </div>
           </div>
 
@@ -345,43 +365,20 @@ export function CourseFormDialog({ open, onOpenChange, course, mode = "upcoming"
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="cf-lecturer">Lecturer / Lead</Label>
-              <Input
-                id="cf-lecturer"
-                value={form.lecturer}
-                onChange={(e) => set("lecturer", e.target.value)}
-                placeholder="e.g. Arjun Mehta"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cf-duration">Duration (Months)</Label>
-              <Input
-                id="cf-duration"
-                type="number"
-                min={1}
-                value={form.duration_months}
-                onChange={(e) => set("duration_months", e.target.value)}
-                placeholder="e.g. 6"
-              />
-              <p className="text-[11px] text-muted-foreground">Course length in whole months.</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Difficulty</Label>
-              <Select value={form.difficulty} onValueChange={(v) => set("difficulty", v as Difficulty)}>
-                <SelectTrigger id="cf-difficulty" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DIFFICULTIES.map((d) => (
-                    <SelectItem key={d} value={d}>
-                      {d}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-2">
+            <Label>Difficulty</Label>
+            <Select value={form.difficulty} onValueChange={(v) => set("difficulty", v as Difficulty)}>
+              <SelectTrigger id="cf-difficulty" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DIFFICULTIES.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

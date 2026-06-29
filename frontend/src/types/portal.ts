@@ -19,6 +19,7 @@ export interface Course extends BaseProduct {
   estimated_duration?: number;
   discord_renewal_price?: number;
   status?: "upcoming" | "ongoing" | "completed";
+  batch_id?: string;
 }
 
 export interface Indicator extends BaseProduct {
@@ -86,7 +87,7 @@ export interface ToastMessage {
 
 export interface Lesson {
   id: string;
-  course_id: string;
+  batch_id?: string;
   title: string;
   type: 'youtube' | 'zoom' | 'meet';
   link: string;

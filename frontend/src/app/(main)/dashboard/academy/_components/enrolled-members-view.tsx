@@ -236,7 +236,7 @@ export function EnrolledMembersView({ course }: Props) {
               Manage client access and contact details for this course.
             </CardDescription>
           </div>
-          {course.status === "upcoming" && (
+          {(course.status === "upcoming" || course.status === "ongoing") && (
             <Button onClick={handleOpenAdd} className="shrink-0 gap-1.5">
               <UserPlus className="size-4" />
               Add Client

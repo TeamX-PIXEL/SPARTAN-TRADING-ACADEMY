@@ -22,14 +22,14 @@ export function ThemeSwitcher() {
 
   return (
     <Button size="icon" onClick={cycleTheme} aria-label={`Current theme: ${themeMode}. Click to cycle themes`}>
-      {/* SYSTEM */}
+      {/* SYSTEM - only shows when data-theme-mode=system */}
       <Monitor className="hidden [html[data-theme-mode=system]_&]:block" />
 
-      {/* DARK (resolved) */}
-      <Sun className="hidden dark:block [html[data-theme-mode=system]_&]:hidden" />
+      {/* SUN = light mode is active */}
+      <Sun className="block dark:hidden [html[data-theme-mode=system]_&]:hidden" />
 
-      {/* LIGHT (resolved) */}
-      <Moon className="block dark:hidden [html[data-theme-mode=system]_&]:hidden" />
+      {/* MOON = dark mode is active */}
+      <Moon className="hidden dark:block [html[data-theme-mode=system]_&]:hidden" />
     </Button>
   );
 }

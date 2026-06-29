@@ -14,4 +14,4 @@ class Purchase(Base):
 
     cost = Column(Float)
     purchased_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    expiry = Column(DateTime, default=lambda: datetime.now(timezone.utc) + timedelta(days=30))
+    expiry = Column(DateTime, default=lambda: datetime.now(timezone.utc) + timedelta(days=365))

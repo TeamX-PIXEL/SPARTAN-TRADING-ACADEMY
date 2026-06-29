@@ -7,11 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db, get_db_connection
 from app.models import (
-    User, Course, Indicator, Bot, Transaction,
-    CourseMember, IndicatorMember, BotMember,
+    User, Course, Batch, Indicator, Bot, Transaction,
+    BatchMember, IndicatorMember, BotMember,
 )
 from app.models.admin import AdminUser
-from app.schemas import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest, DiscordRenewRequest
+from app.schemas import TransactionCreate, TransactionResponse, PurchaseRequest, RenewRequest, DiscordRenewRequest, TransactionUpdate
 from app.core.deps import get_current_user, get_current_admin
 
 router = APIRouter(prefix="", tags=["Transactions"])
@@ -20,6 +20,14 @@ router = APIRouter(prefix="", tags=["Transactions"])
 # ==========================================
 # HELPERS
 # ==========================================
+def _get_user_billing(db: Session, username: str):
+    """Fetch address, country, pincode from users table for a given username."""
+    user = db.query(User).filter(User.UserID == username).first()
+    if user:
+        return {"address": user.address, "country": user.country, "pincode": user.pincode}
+    return {"address": None, "country": None, "pincode": None}
+
+
 def parse_expiry_period(expiry_period: str, now: datetime = None):
     """
     Parses an expiry_period string (e.g. '7D', '1M', '3M', '6M', '1Y', '1L')
@@ -66,23 +74,29 @@ SECTION_MAP = {
 
 @router.get("/api/admin/transactions")
 def list_transactions(
+    unsettled: bool = False,
     db: Session = Depends(get_db),
     admin=Depends(get_current_admin),
 ):
     """List all transactions with user info and product titles."""
-    rows = (
+    query = (
         db.query(Transaction, User)
         .join(User, Transaction.username == User.UserID, isouter=True)
-        .order_by(Transaction.created_at.desc())
-        .all()
     )
+    if unsettled:
+        query = query.filter(Transaction.settlement_date.is_(None))
+    rows = query.order_by(Transaction.created_at.desc()).all()
 
     results = []
     for txn, user in rows:
         item_name = None
-        if txn.product_section == "Course" and txn.course_id:
-            course = db.query(Course).filter(Course.course_id == txn.course_id).first()
-            item_name = course.title if course else None
+        resolved_course_id = None
+        if txn.product_section == "Course" and txn.batch_id:
+            batch = db.query(Batch).filter(Batch.batch_id == txn.batch_id).first()
+            if batch:
+                resolved_course_id = batch.course_id
+                course = db.query(Course).filter(Course.course_id == batch.course_id).first()
+                item_name = course.title if course else None
         elif txn.product_section == "Indicator" and txn.indicator_id:
             indicator = db.query(Indicator).filter(Indicator.indicator_id == txn.indicator_id).first()
             item_name = indicator.title if indicator else None
@@ -109,11 +123,15 @@ def list_transactions(
             "status": txn.status,
             "username": txn.username,
             "product_section": txn.product_section,
-            "course_id": txn.course_id,
+            "course_id": resolved_course_id,
             "indicator_id": txn.indicator_id,
             "bot_id": txn.bot_id,
             "expiry": txn.expiry.isoformat() if txn.expiry else None,
             "created_at": txn.created_at.isoformat() if txn.created_at else None,
+            "settlement_date": txn.settlement_date.isoformat() if txn.settlement_date else None,
+            "address": txn.address,
+            "country": txn.country,
+            "pincode": txn.pincode,
         })
 
     return results
@@ -169,10 +187,7 @@ def transaction_summary(
 
         product_id_col = None
         product_table = None
-        if section_name == "Course":
-            product_id_col = Transaction.course_id
-            product_table = Course
-        elif section_name == "Indicator":
+        if section_name == "Indicator":
             product_id_col = Transaction.indicator_id
             product_table = Indicator
         elif section_name == "Bot":
@@ -196,15 +211,34 @@ def transaction_summary(
                 .first()
             )
             if item_revenues and item_revenues[0]:
-                if section_name == "Course":
-                    c = db.query(Course).filter(Course.course_id == item_revenues[0]).first()
-                    top_item = c.title if c else None
-                elif section_name == "Indicator":
+                if section_name == "Indicator":
                     ind = db.query(Indicator).filter(Indicator.indicator_id == item_revenues[0]).first()
                     top_item = ind.title if ind else None
                 elif section_name == "Bot":
-                    b = db.query(Bot).filter(Bot.bot_id == item_revenues[0]).first()
-                    top_item = b.title if b else None
+                    bot = db.query(Bot).filter(Bot.bot_id == item_revenues[0]).first()
+                    top_item = bot.title if bot else None
+                top_item_revenue = item_revenues[1]
+        elif section_name == "Course":
+            item_revenues = (
+                db.query(
+                    Batch.course_id,
+                    func.coalesce(func.sum(Transaction.amount), 0.0).label("item_rev"),
+                )
+                .join(Batch, Batch.batch_id == Transaction.batch_id)
+                .filter(
+                    Transaction.status == "completed",
+                    Transaction.product_section == "Course",
+                    Transaction.batch_id.isnot(None),
+                )
+                .group_by(Batch.course_id)
+                .order_by(func.sum(Transaction.amount).desc())
+                .limit(1)
+                .first()
+            )
+            if item_revenues and item_revenues[0]:
+                c = db.query(Course).filter(Course.course_id == item_revenues[0]).first()
+                top_item = c.title if c else None
+                top_item_revenue = item_revenues[1]
 
         by_section.append({
             "section": SECTION_MAP.get(section_name, section_name),
@@ -319,39 +353,56 @@ def create_transaction(
         raise HTTPException(status_code=400, detail="Invalid product_section")
 
     # 1. Insert transaction
+    batch_id_val = None
+    if section == "Course":
+        course = db.query(Course).filter(Course.course_id == payload.course_id).first()
+        if not course:
+            raise HTTPException(status_code=404, detail="Course not found")
+        batch = db.query(Batch).filter(Batch.course_id == course.course_id).order_by(Batch.id.desc()).first()
+        batch_id_val = batch.batch_id if batch else None
+
+    billing = _get_user_billing(db, payload.username)
+
     txn = Transaction(
         username=payload.username,
         product_section=section,
-        course_id=payload.course_id if section == "Course" else None,
         indicator_id=payload.indicator_id if section == "Indicator" else None,
         bot_id=payload.bot_id if section == "Bot" else None,
+        batch_id=batch_id_val,
         expiry=payload.expiry,
         amount=payload.amount,
         method=payload.method,
         status=payload.status,
+        address=billing["address"],
+        country=billing["country"],
+        pincode=billing["pincode"],
     )
     db.add(txn)
 
     # 2. Upsert member record
     if section == "Course":
-        existing = db.query(CourseMember).filter(
-            CourseMember.username == payload.username,
-            CourseMember.course_id == payload.course_id,
+        existing = db.query(BatchMember).filter(
+            BatchMember.username == payload.username,
+            BatchMember.batch_id == batch_id_val,
         ).first()
         if existing:
             existing.expiry = payload.expiry or existing.expiry
             existing.joined_at = existing.joined_at
             db.add(existing)
         else:
-            db.add(CourseMember(
+            db.add(BatchMember(
                 username=payload.username,
-                course_id=payload.course_id,
+                batch_id=batch_id_val,
                 expiry=payload.expiry,
             ))
 
         # 3. Increment purchased_count
-        course.purchased_count = (course.purchased_count or 0) + 1
-        db.add(course)
+        if batch:
+            batch.purchased_count = (batch.purchased_count or 0) + 1
+            db.add(batch)
+        else:
+            course.purchased_count = (course.purchased_count or 0) + 1
+            db.add(course)
 
     elif section == "Indicator":
         existing = db.query(IndicatorMember).filter(
@@ -394,6 +445,32 @@ def create_transaction(
     return TransactionResponse.model_validate(txn)
 
 
+@router.put("/api/admin/transactions/{transaction_id}")
+def update_transaction(
+    transaction_id: int,
+    payload: TransactionUpdate,
+    db: Session = Depends(get_db),
+    admin=Depends(get_current_admin),
+):
+    """Update settlement_date, address, country, pincode on a transaction."""
+    txn = db.query(Transaction).filter(Transaction.id == transaction_id).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    if payload.settlement_date is not None:
+        txn.settlement_date = payload.settlement_date
+    if payload.address is not None:
+        txn.address = payload.address
+    if payload.country is not None:
+        txn.country = payload.country
+    if payload.pincode is not None:
+        txn.pincode = payload.pincode
+
+    db.commit()
+    db.refresh(txn)
+    return {"ok": True, "id": txn.id}
+
+
 # ==========================================
 # USER-FACING: ENROLLMENT STATUS
 # ==========================================
@@ -408,18 +485,18 @@ def get_enrollment_status(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    txn = db.query(Transaction).filter(
+    txn = db.query(Transaction).join(Batch, Batch.batch_id == Transaction.batch_id).filter(
         Transaction.username == current_user.UserID,
-        Transaction.course_id == course_id,
+        Batch.course_id == course_id,
         Transaction.status == "completed",
     ).first()
 
     if not txn:
         return {"is_purchased": False, "expiry": None, "member_since": None}
 
-    member = db.query(CourseMember).filter(
-        CourseMember.username == current_user.UserID,
-        CourseMember.course_id == course_id,
+    member = db.query(BatchMember).join(Batch, Batch.batch_id == BatchMember.batch_id).filter(
+        BatchMember.username == current_user.UserID,
+        Batch.course_id == course_id,
     ).first()
 
     return {
@@ -443,7 +520,13 @@ def get_my_purchases(
         Transaction.status == "completed",
     ).all()
 
-    course_ids = [t.course_id for t in txns if t.product_section == "Course" and t.course_id]
+    course_ids = []
+    for t in txns:
+        if t.product_section == "Course" and t.batch_id:
+            batch = db.query(Batch).filter(Batch.batch_id == t.batch_id).first()
+            if batch:
+                course_ids.append(batch.course_id)
+    course_ids = list(set(course_ids))
     indicator_ids = [t.indicator_id for t in txns if t.product_section == "Indicator" and t.indicator_id]
     bot_ids = [t.bot_id for t in txns if t.product_section == "Bot" and t.bot_id]
 
@@ -466,55 +549,67 @@ def get_my_library(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Returns the current user's purchased courses, indicators, and bots with details."""
+    """Returns the current user's purchased courses, indicators, and bots with details.
+    Courses are batch-centric: data flows from batch_members → batches → courses."""
     txns = db.query(Transaction).filter(
         Transaction.username == current_user.UserID,
         Transaction.status == "completed",
     ).all()
 
-    course_ids = list({t.course_id for t in txns if t.product_section == "Course" and t.course_id})
     indicator_ids = list({t.indicator_id for t in txns if t.product_section == "Indicator" and t.indicator_id})
     bot_ids = list({t.bot_id for t in txns if t.product_section == "Bot" and t.bot_id})
 
+    memberships = db.query(BatchMember).filter(
+        BatchMember.username == current_user.UserID,
+    ).all()
+
     courses = []
-    if course_ids:
-        course_objs = db.query(Course).filter(Course.course_id.in_(course_ids)).all()
-        for c in course_objs:
-            member = db.query(CourseMember).filter(
-                CourseMember.username == current_user.UserID,
-                CourseMember.course_id == c.course_id,
-            ).first()
-            txn = db.query(Transaction).filter(
-                Transaction.username == current_user.UserID,
-                Transaction.course_id == c.course_id,
-            ).order_by(Transaction.created_at.desc()).first()
+    seen_batch_ids = set()
+    for m in memberships:
+        if not m.batch_id or m.batch_id in seen_batch_ids:
+            continue
+        seen_batch_ids.add(m.batch_id)
 
-            if c.completed_at:
-                computed_status = "completed"
-            elif c.scheduled_at and c.scheduled_at <= datetime.now(timezone.utc).replace(tzinfo=None):
-                computed_status = "ongoing"
-            else:
-                computed_status = "upcoming"
+        batch = db.query(Batch).filter(Batch.batch_id == m.batch_id).first()
+        if not batch:
+            continue
 
-            courses.append({
-                "id": c.id,
-                "course_id": c.course_id,
-                "title": c.title,
-                "description": c.description,
-                "long_description": c.long_description or c.description,
-                "thumbnail": c.image or c.course_thumbnail,
-                "status": computed_status,
-                "expiry": member.expiry.isoformat() if member and member.expiry else (
-                    txn.expiry.isoformat() if txn and txn.expiry else None
-                ),
-                "purchased_at": txn.created_at.isoformat() if txn else None,
-                "discord_channel_id": c.discord_channel_id,
-                "discord_renewal_price": c.discord_renewal_price,
-                "scheduled_at": c.scheduled_at.isoformat() if c.scheduled_at else None,
-                "lecturer": c.lecturer,
-                "difficulty": c.difficulty,
-                "duration_months": c.duration_months,
-            })
+        c = db.query(Course).filter(Course.course_id == batch.course_id).first()
+        if not c:
+            continue
+
+        txn = db.query(Transaction).filter(
+            Transaction.username == current_user.UserID,
+            Transaction.batch_id == batch.batch_id,
+        ).order_by(Transaction.created_at.desc()).first()
+
+        if batch.completed_at:
+            computed_status = "completed"
+        elif batch.scheduled_at and batch.scheduled_at <= datetime.now(timezone.utc).replace(tzinfo=None):
+            computed_status = "ongoing"
+        else:
+            computed_status = "upcoming"
+
+        courses.append({
+            "id": c.id,
+            "course_id": c.course_id,
+            "batch_id": batch.batch_id,
+            "title": c.title,
+            "description": c.description,
+            "long_description": c.long_description or c.description,
+            "thumbnail": c.image or c.course_thumbnail,
+            "status": computed_status,
+            "expiry": m.expiry.isoformat() if m and m.expiry else (
+                txn.expiry.isoformat() if txn and txn.expiry else None
+            ),
+            "purchased_at": txn.created_at.isoformat() if txn else None,
+            "discord_channel_id": batch.discord_channel_id or c.discord_channel_id,
+            "discord_renewal_price": batch.discord_renewal_price or c.discord_renewal_price,
+            "scheduled_at": batch.scheduled_at.isoformat() if batch.scheduled_at else None,
+            "lecturer": batch.instructor or "",
+            "difficulty": c.difficulty,
+            "duration_months": c.duration_months,
+        })
 
     indicators = []
     if indicator_ids:
@@ -589,8 +684,12 @@ def get_my_transactions(
         product_image = None
         product_id = None
 
-        if txn.product_section == "Course" and txn.course_id:
-            course = db.query(Course).filter(Course.course_id == txn.course_id).first()
+        if txn.product_section == "Course" and txn.batch_id:
+            batch = db.query(Batch).filter(Batch.batch_id == txn.batch_id).first()
+            if batch:
+                course = db.query(Course).filter(Course.course_id == batch.course_id).first()
+            else:
+                course = None
             if course:
                 product_title = course.title
                 product_image = course.course_thumbnail or course.image
@@ -610,7 +709,7 @@ def get_my_transactions(
 
         if not product_title:
             if txn.product_section == "Course":
-                product_title = txn.course_id
+                product_title = txn.batch_id or "Course"
             elif txn.product_section == "Indicator":
                 product_title = txn.indicator_id
             elif txn.product_section == "Bot":
@@ -701,7 +800,10 @@ def purchase_item(
         Transaction.status == "completed",
     )
     if section == "Course":
-        existing_query = existing_query.filter(Transaction.course_id == product_id)
+        course = db.query(Course).filter(Course.course_id == product_id).first()
+        existing_batch_ids = [b.batch_id for b in db.query(Batch).filter(Batch.course_id == product_id).all()] if course else []
+        if existing_batch_ids:
+            existing_query = existing_query.filter(Transaction.batch_id.in_(existing_batch_ids))
     elif section == "Indicator":
         existing_query = existing_query.filter(Transaction.indicator_id == product_id)
     elif section == "Bot":
@@ -712,12 +814,11 @@ def purchase_item(
 
     # Create transaction
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    expiry_date = now + timedelta(days=30)
+    expiry_date = now + timedelta(days=365)
 
     txn = Transaction(
         username=current_user.UserID,
         product_section=section,
-        course_id=product_id if section == "Course" else None,
         indicator_id=product_id if section == "Indicator" else None,
         bot_id=product_id if section == "Bot" else None,
         expiry=expiry_date,
@@ -725,22 +826,33 @@ def purchase_item(
         method=payload.method or "Card",
         type="Purchase",
         status="completed",
+        address=current_user.address,
+        country=current_user.country,
+        pincode=current_user.pincode,
     )
     db.add(txn)
 
     # Upsert member record + increment purchased_count
     if section == "Course":
-        existing_member = db.query(CourseMember).filter(
-            CourseMember.username == current_user.UserID,
-            CourseMember.course_id == product_id,
+        batch = db.query(Batch).filter(Batch.course_id == product.id).order_by(Batch.id.desc()).first()
+        batch_id_val = batch.batch_id if batch else None
+
+        existing_member = db.query(BatchMember).filter(
+            BatchMember.username == current_user.UserID,
+            BatchMember.batch_id == batch_id_val,
         ).first()
         if not existing_member:
-            db.add(CourseMember(
+            db.add(BatchMember(
                 username=current_user.UserID,
-                course_id=product_id,
+                batch_id=batch_id_val,
                 expiry=expiry_date,
             ))
-            product.purchased_count = (product.purchased_count or 0) + 1
+            if batch:
+                batch.purchased_count = (batch.purchased_count or 0) + 1
+            else:
+                product.purchased_count = (product.purchased_count or 0) + 1
+
+        txn.batch_id = batch_id_val
 
     elif section == "Indicator":
         existing_member = db.query(IndicatorMember).filter(
@@ -826,6 +938,9 @@ def renew_product(
         method=payload.method or "Card",
         type="Renewal",
         status="completed",
+        address=current_user.address,
+        country=current_user.country,
+        pincode=current_user.pincode,
     )
     db.add(txn)
     db.commit()
@@ -850,16 +965,22 @@ def renew_discord(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    batch = db.query(Batch).filter(Batch.course_id == course.course_id).order_by(Batch.id.desc()).first()
+    batch_id_val = batch.batch_id if batch else None
+
     # Create renewal transaction
     txn = Transaction(
         username=current_user.UserID,
         product_section="Course",
-        course_id=payload.course_id,
+        batch_id=batch_id_val,
         expiry=None,
         amount=payload.amount,
         method=payload.method or "Card",
         type="Renewal",
         status="completed",
+        address=current_user.address,
+        country=current_user.country,
+        pincode=current_user.pincode,
     )
     db.add(txn)
     db.commit()

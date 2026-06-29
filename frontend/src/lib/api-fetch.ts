@@ -5,7 +5,7 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
     ...((options.headers as Record<string, string>) || {}),
   };
 
-  const localToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const localToken = typeof window !== "undefined" ? localStorage.getItem("access_token") ?? sessionStorage.getItem("access_token") : null;
 
   if (typeof window !== "undefined") {
     const path = window.location.pathname;
@@ -40,6 +40,10 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
     const path = window.location.pathname;
     if (path.startsWith("/portal")) {
       localStorage.removeItem("access_token");
+      sessionStorage.removeItem("access_token");
+      localStorage.removeItem("dealdeck_purchases");
+      localStorage.removeItem("dealdeck_cart");
+      localStorage.removeItem("dealdeck_notifications");
       window.location.href = "/auth/v2/login";
     } else if (!path.startsWith("/dashboard")) {
       window.location.href = "/auth/v1/login";

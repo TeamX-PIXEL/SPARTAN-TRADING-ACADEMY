@@ -138,6 +138,7 @@ def add_bot_member(bot_id: int, req: AddBotMemberRequest, db: Session = Depends(
     existing = db.query(BotMember).filter(BotMember.username == req.username, BotMember.bot_id == bot.bot_id).first()
     if existing:
         raise HTTPException(status_code=400, detail="User already enrolled in this bot")
+    user = db.query(User).filter(User.UserID == req.username).first()
     member = BotMember(
         username=req.username,
         bot_id=bot.bot_id,
@@ -153,6 +154,9 @@ def add_bot_member(bot_id: int, req: AddBotMemberRequest, db: Session = Depends(
         amount=req.amount,
         method=req.method or ("Free" if req.amount == 0 else None),
         status="completed",
+        address=user.address if user else None,
+        country=user.country if user else None,
+        pincode=user.pincode if user else None,
     )
     db.add(txn)
     db.commit()

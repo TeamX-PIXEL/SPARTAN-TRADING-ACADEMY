@@ -242,6 +242,9 @@ def add_indicator_member(
             amount=payload.amount,
             method=payload.method or "Free",
             status="completed",
+            address=user.address,
+            country=user.country,
+            pincode=user.pincode,
         )
         db.add(txn)
         db.commit()

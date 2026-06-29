@@ -16,7 +16,7 @@ export const MobileNav: React.FC<{ onOpenCart: () => void }> = ({ onOpenCart }) 
     { path: "/portal/indicators", label: "Scripts", icon: LineChart },
     { path: "/portal/alerts", label: "Bots", icon: Zap },
     { path: "/portal/library", label: "Library", icon: Library },
-    { path: "https://t.me/stoic_trader", label: "Support", icon: HelpCircle, isExternal: true },
+    { path: "/portal/support", label: "Support", icon: HelpCircle },
     { path: "/portal/settings", label: "Settings", icon: Settings },
   ];
 
@@ -24,24 +24,9 @@ export const MobileNav: React.FC<{ onOpenCart: () => void }> = ({ onOpenCart }) 
     <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#0c0d0f]/95 border-t border-[#1e222b] backdrop-blur-lg z-40 flex items-center justify-around px-4 select-none">
       {navItems.map((item) => {
         const Icon = item.icon;
-        const isActive = !item.isExternal && (item.path === '/portal/settings' 
+        const isActive = item.path === '/portal/settings' 
           ? currentPath.startsWith('/portal/settings') 
-          : currentPath === item.path);
-
-        if (item.isExternal) {
-          return (
-            <a
-              key={item.path}
-              href={item.path}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex flex-col items-center justify-center gap-1 flex-1 text-center py-2 transition-colors duration-200 text-neutral-500 hover:text-neutral-300"
-            >
-              <Icon className="w-4.5 h-4.5" />
-              <span className="text-[9px] uppercase tracking-wider">{item.label}</span>
-            </a>
-          );
-        }
+          : currentPath === item.path;
 
         return (
           <Link

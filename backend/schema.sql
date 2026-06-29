@@ -390,20 +390,33 @@ SET @sql = IF(
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'courses' AND column_name = 'discord_channel_id') = 0,
+    'ALTER TABLE courses ADD COLUMN discord_channel_id VARCHAR(255) AFTER completed_at',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = @dbname AND table_name = 'courses' AND column_name = 'discord_renewal_price') = 0,
+    'ALTER TABLE courses ADD COLUMN discord_renewal_price FLOAT AFTER discord_channel_id',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- ============================================================================
 -- lessons (managed by SQLAlchemy Lesson model)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS lessons (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    course_id INT,
+    batch_id VARCHAR(50),
     title VARCHAR(255),
     type VARCHAR(50) DEFAULT 'youtube',
     link TEXT,
     duration VARCHAR(50),
     start_time DATETIME,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Drop old tables that are no longer needed
@@ -415,16 +428,16 @@ DROP TABLE IF EXISTS course_progress;
 DROP TABLE IF EXISTS purchases;
 
 -- ============================================================================
--- course_members
+-- batch_members (was course_members, renamed for batch architecture)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS course_members (
+CREATE TABLE IF NOT EXISTS batch_members (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL,
-    course_id VARCHAR(50) NOT NULL,
+    batch_id VARCHAR(50),
     expiry DATETIME,
     joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_course_user (username, course_id)
+    UNIQUE KEY uk_batch_user (username, batch_id)
 );
 
 -- ============================================================================
@@ -461,7 +474,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(100) NOT NULL,
     product_section ENUM('Course', 'Discord', 'Indicator', 'Bot') NOT NULL,
-    course_id VARCHAR(50),
+    batch_id VARCHAR(50),
     indicator_id VARCHAR(50),
     bot_id VARCHAR(50),
     expiry DATETIME,
@@ -470,4 +483,190 @@ CREATE TABLE IF NOT EXISTS transactions (
     status VARCHAR(20) DEFAULT 'completed',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+);
+
+-- ============================================================================
+-- MIGRATIONS: Rename course_members → batch_members, add batch_id columns
+-- ============================================================================
+
+-- Rename course_members to batch_members if old table exists and new one doesn't
+SET @old_exists = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'course_members');
+SET @new_exists = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'batch_members');
+SET @sql = IF(@old_exists > 0 AND @new_exists = 0,
+    'RENAME TABLE course_members TO batch_members',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id to batch_members if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'batch_members' AND column_name = 'batch_id') = 0,
+    'ALTER TABLE batch_members ADD COLUMN batch_id VARCHAR(50) AFTER course_id',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Drop old unique key and add new one for batch_id
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = 'batch_members' AND constraint_name = 'uk_course_user') > 0,
+    'ALTER TABLE batch_members DROP INDEX uk_course_user',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = 'batch_members' AND constraint_name = 'uk_batch_user') = 0,
+    'ALTER TABLE batch_members ADD UNIQUE KEY uk_batch_user (username, batch_id)',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id to lessons if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lessons' AND column_name = 'batch_id') = 0,
+    'ALTER TABLE lessons ADD COLUMN batch_id VARCHAR(50) AFTER course_id',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id to transactions if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'transactions' AND column_name = 'batch_id') = 0,
+    'ALTER TABLE transactions ADD COLUMN batch_id VARCHAR(50) AFTER course_id',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add type to transactions if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'transactions' AND column_name = 'type') = 0,
+    'ALTER TABLE transactions ADD COLUMN type VARCHAR(20) DEFAULT ''Purchase'' AFTER method',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id to batches table (should already exist from prior migration)
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'batches') = 0,
+    'CREATE TABLE IF NOT EXISTS batches (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        batch_id VARCHAR(50) UNIQUE,
+        course_id VARCHAR(50),
+        instructor VARCHAR(255) DEFAULT '',
+        purchased_count INT DEFAULT 0,
+        status VARCHAR(20) DEFAULT ''upcoming'',
+        scheduled_at DATETIME,
+        completed_at DATETIME,
+        discord_channel_id VARCHAR(255),
+        discord_renewal_price FLOAT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id FK to lessons if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = 'lessons' AND constraint_name = 'fk_lessons_batch_id') = 0,
+    'ALTER TABLE lessons ADD CONSTRAINT fk_lessons_batch_id FOREIGN KEY (batch_id) REFERENCES batches(batch_id) ON DELETE SET NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id FK to batch_members if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = 'batch_members' AND constraint_name = 'fk_batchmembers_batch_id') = 0,
+    'ALTER TABLE batch_members ADD CONSTRAINT fk_batchmembers_batch_id FOREIGN KEY (batch_id) REFERENCES batches(batch_id) ON DELETE SET NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id FK to transactions if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = 'transactions' AND constraint_name = 'fk_transactions_batch_id') = 0,
+    'ALTER TABLE transactions ADD CONSTRAINT fk_transactions_batch_id FOREIGN KEY (batch_id) REFERENCES batches(batch_id) ON DELETE SET NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Drop old batch-ified columns from courses if they exist
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'courses' AND column_name = 'lecturer') > 0,
+    'ALTER TABLE courses DROP COLUMN lecturer',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'courses' AND column_name = 'scheduled_at') > 0,
+    'ALTER TABLE courses DROP COLUMN scheduled_at',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'courses' AND column_name = 'status') > 0,
+    'ALTER TABLE courses DROP COLUMN status',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'courses' AND column_name = 'completed_at') > 0,
+    'ALTER TABLE courses DROP COLUMN completed_at',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Drop course_id from batch_members (redundant, derivable via batch → course)
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'batch_members' AND column_name = 'course_id') > 0,
+    'ALTER TABLE batch_members DROP COLUMN course_id',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Drop course_id from transactions (redundant, derivable via batch → course)
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'transactions' AND column_name = 'course_id') > 0,
+    'ALTER TABLE transactions DROP COLUMN course_id',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Drop course_id from lessons (redundant, derivable via batch → course)
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lessons' AND column_name = 'course_id') > 0,
+    'ALTER TABLE lessons DROP FOREIGN KEY lessons_ibfk_1',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'lessons' AND column_name = 'course_id') > 0,
+    'ALTER TABLE lessons DROP COLUMN course_id',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Add batch_id FK to lessons if missing
+SET @sql = IF(
+    (SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = 'lessons' AND constraint_name = 'fk_lessons_batch_id') = 0,
+    'ALTER TABLE lessons ADD CONSTRAINT fk_lessons_batch_id FOREIGN KEY (batch_id) REFERENCES batches(batch_id) ON DELETE SET NULL',
+    'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ============================================================================
+-- course_lessons (pre-launch YouTube videos linked to course only)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS course_lessons (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    course_id VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    link TEXT,
+    duration VARCHAR(50),
+    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_course_lessons_course_id (course_id)
 );

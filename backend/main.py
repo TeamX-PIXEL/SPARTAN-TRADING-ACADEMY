@@ -2996,8 +2996,8 @@ def create_purchase(
         # Generate a unique API key for the user
         api_key = generate_api_key()
 
-        # Default expiry: 30 days from now (same as Purchase model default)
-        expiry_date = (now + timedelta(days=30)).date()
+        # Default expiry: 1 year from now
+        expiry_date = (now + timedelta(days=365)).date()
         far_future = date(2099, 12, 31)
 
         # Upsert into signal_users (MySQL)

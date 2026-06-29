@@ -75,6 +75,7 @@ interface ClientUser {
 interface EnrolledProduct {
   member_id: number;
   product_id: string;
+  batch_id?: string;
   title: string;
   access_type: string;
   joined_at: string;
@@ -747,6 +748,7 @@ export function ClientsManageClient() {
                     id: p.member_id,
                     name: p.title,
                     idLabel: p.product_id,
+                    batchId: p.batch_id,
                     access: p.access_type,
                     joined: p.joined_at,
                     expiry: p.expiry || "",
@@ -949,7 +951,7 @@ function EnrolledProductsTable({
   type,
   onEditExpiry,
 }: {
-  items: { id: number; name: string; idLabel: string; access: string; joined: string; expiry: string }[];
+  items: { id: number; name: string; idLabel: string; batchId?: string; access: string; joined: string; expiry: string }[];
   type: "course" | "indicator" | "bot";
   onEditExpiry: (id: number, date: string) => void;
 }) {
@@ -1005,6 +1007,7 @@ function EnrolledProductsTable({
                       <TableHead className="w-[60px] text-center">#</TableHead>
                       <TableHead>Product</TableHead>
                       <TableHead className="hidden md:table-cell">ID</TableHead>
+                      {type === "course" && <TableHead className="hidden lg:table-cell">Batch</TableHead>}
                       <TableHead className="text-center">Access</TableHead>
                       <TableHead className="hidden md:table-cell">Enrolled</TableHead>
                       <TableHead className="hidden md:table-cell">{expiryLabel}</TableHead>
@@ -1020,6 +1023,11 @@ function EnrolledProductsTable({
                           </TableCell>
                           <TableCell className="font-medium">{item.name}</TableCell>
                           <TableCell className="hidden font-mono text-[12px] md:table-cell">{item.idLabel}</TableCell>
+                          {type === "course" && (
+                            <TableCell className="hidden font-mono text-[12px] lg:table-cell">
+                              {item.batchId || "—"}
+                            </TableCell>
+                          )}
                           <TableCell className="text-center">
                             <Badge
                               variant="outline"
@@ -1054,7 +1062,7 @@ function EnrolledProductsTable({
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
+                        <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">
                           No {type} enrolments.
                         </TableCell>
                       </TableRow>

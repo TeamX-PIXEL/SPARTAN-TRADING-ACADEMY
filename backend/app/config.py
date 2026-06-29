@@ -25,6 +25,7 @@ class Settings:
     SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Trading Alerts")
 
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost:8000")
+    CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "")
 
 
 @lru_cache()

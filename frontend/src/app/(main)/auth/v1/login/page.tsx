@@ -1,9 +1,6 @@
-import Link from "next/link";
-
-import { Command, LogOut } from "lucide-react";
+import { Command } from "lucide-react";
 
 import { LoginForm } from "../../_components/login-form";
-import { GoogleButton } from "../../_components/social-auth/google-button";
 
 export default function LoginV1() {
   return (
@@ -11,10 +8,7 @@ export default function LoginV1() {
       <div className="hidden bg-primary lg:block lg:w-1/3">
         <div className="flex h-full flex-col items-center justify-center p-12 text-center">
           <div className="space-y-6">
-            <div className="relative">
-              <Command className="mx-auto size-12 text-primary-foreground" />
-              <LogOut className="absolute -bottom-2 -right-2 size-6 text-primary-foreground/80" />
-            </div>
+            <Command className="mx-auto size-12 text-primary-foreground" />
             <div className="space-y-2">
               <h1 className="font-light text-5xl text-primary-foreground">Hello again</h1>
               <p className="text-primary-foreground/80 text-xl">Login to continue</p>
@@ -33,13 +27,6 @@ export default function LoginV1() {
           </div>
           <div className="space-y-4">
             <LoginForm />
-            <GoogleButton className="w-full" variant="outline" />
-            <p className="text-center text-muted-foreground text-xs">
-              Don&apos;t have an account?{" "}
-              <Link prefetch={false} href="register" className="text-primary">
-                Register
-              </Link>
-            </p>
           </div>
         </div>
       </div>

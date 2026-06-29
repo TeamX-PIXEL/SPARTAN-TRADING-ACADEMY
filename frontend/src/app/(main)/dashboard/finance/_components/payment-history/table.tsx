@@ -14,10 +14,10 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { ChevronLeftIcon, ChevronRightIcon, ChevronsLeftIcon, ChevronsRightIcon, Download } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, ChevronsLeftIcon, ChevronsRightIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -27,6 +27,7 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   emptyMessage?: string;
+  headerAction?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -35,6 +36,7 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   emptyMessage = "No payments yet.",
+  headerAction,
 }: DataTableProps<TData, TValue>) {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -67,12 +69,7 @@ export function DataTable<TData, TValue>({
           <CardTitle className="truncate text-base leading-none">{title}</CardTitle>
           <CardDescription className="mt-1.5 truncate">{description}</CardDescription>
         </div>
-        <CardAction className="shrink-0 m-0">
-          <Button variant="outline" size="sm" className="px-2 sm:px-3" disabled>
-            <Download className="sm:mr-2 size-4" />
-            <span className="hidden sm:inline">Export</span>
-          </Button>
-        </CardAction>
+        {headerAction && <div className="shrink-0">{headerAction}</div>}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
